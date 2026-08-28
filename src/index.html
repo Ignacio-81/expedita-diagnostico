@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expedita — Diagnóstico</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-title">
+    <h1>Expedita — Diagnóstico</h1>
+    <span class="env-badge" id="env-badge">—</span>
+  </div>
+  <div class="topbar-actions">
+    <span class="ultima-actualizacion" id="ultima-actualizacion">Sin datos todavía</span>
+    <button id="btn-actualizar" type="button">Actualizar</button>
+  </div>
+</header>
+
+<div class="global-error" id="global-error" hidden></div>
+
+<main class="grid">
+
+  <section class="panel panel-wide" id="panel-n8n" aria-labelledby="h-n8n">
+    <div class="panel-header">
+      <h2 id="h-n8n">Salud — n8n</h2>
+      <span class="status-pill" id="n8n-status">—</span>
+    </div>
+    <div class="panel-body" id="n8n-body">
+      <p class="sin-datos">Cargando…</p>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-db" aria-labelledby="h-db">
+    <div class="panel-header">
+      <h2 id="h-db">Base de datos</h2>
+      <span class="status-pill" id="db-status">—</span>
+    </div>
+    <div class="panel-body" id="db-body">
+      <p class="sin-datos">Cargando…</p>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-meta" aria-labelledby="h-meta">
+    <div class="panel-header">
+      <h2 id="h-meta">Meta / WhatsApp</h2>
+      <span class="status-pill" id="meta-status">—</span>
+    </div>
+    <div class="panel-body" id="meta-body">
+      <p class="sin-datos">Cargando…</p>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-infra" aria-labelledby="h-infra">
+    <div class="panel-header">
+      <h2 id="h-infra">Infraestructura</h2>
+      <span class="status-pill" id="infra-status">—</span>
+    </div>
+    <div class="panel-body" id="infra-body">
+      <p class="sin-datos">Cargando…</p>
+    </div>
+  </section>
+
+  <section class="panel panel-wide" id="panel-negocio" aria-labelledby="h-negocio">
+    <div class="panel-header">
+      <h2 id="h-negocio">Turnos / Negocio</h2>
+    </div>
+    <div class="panel-body" id="negocio-body">
+      <p class="sin-datos">Cargando…</p>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-costos" aria-labelledby="h-costos">
+    <div class="panel-header">
+      <h2 id="h-costos">Costos <span class="tag-estimado">estimado</span></h2>
+    </div>
+    <div class="panel-body" id="costos-body">
+      <p class="sin-datos">Cargando…</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <p>Panel interno de uso personal — expedita-diagnostico. El backend
+  (WF5) vive en el repo <code>dental-clinic-bot</code>, no acá.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
