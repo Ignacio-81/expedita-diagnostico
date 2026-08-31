@@ -8,84 +8,116 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="topbar-title">
+  <div class="topbar-left">
     <h1>Expedita — Diagnóstico</h1>
     <span class="env-badge" id="env-badge">—</span>
   </div>
-  <div class="topbar-actions">
-    <span class="ultima-actualizacion" id="ultima-actualizacion">Sin datos todavía</span>
-    <button id="btn-actualizar" type="button">Actualizar</button>
+  <div class="topbar-right">
+    <span class="last-update" id="ultima-actualizacion">Sin datos todavía</span>
+    <button type="button" class="theme-toggle" id="btn-theme" aria-pressed="false">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+      <span class="theme-toggle-label" id="theme-toggle-label">Modo oscuro</span>
+    </button>
+    <button id="btn-actualizar" type="button" class="btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+      Actualizar
+    </button>
   </div>
 </header>
 
 <div class="global-error" id="global-error" hidden></div>
 
-<main class="grid">
+<div class="shell">
 
-  <section class="panel panel-wide" id="panel-n8n" aria-labelledby="h-n8n">
-    <div class="panel-header">
-      <h2 id="h-n8n">Salud — n8n</h2>
-      <span class="status-pill" id="n8n-status">—</span>
-    </div>
-    <div class="panel-body" id="n8n-body">
-      <p class="sin-datos">Cargando…</p>
-    </div>
-  </section>
+  <div class="legend">
+    <span class="legend-title">Cómo leer los indicadores</span>
+    <span class="legend-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="legend-icon legend-icon-good" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M8 12l3 3 5-6"></path></svg>
+      OK — funcionando
+    </span>
+    <span class="legend-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="legend-icon legend-icon-warn" aria-hidden="true"><path d="M12 2 1 21h22L12 2z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+      Advertencia — revisar
+    </span>
+    <span class="legend-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="legend-icon legend-icon-crit" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M15 9l-6 6M9 9l6 6"></path></svg>
+      Error — acción requerida
+    </span>
+    <span class="legend-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="legend-icon legend-icon-unk" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.5 9a2.5 2.5 0 0 1 4.9.8c0 1.7-2.4 2-2.4 3.4"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+      Sin datos
+    </span>
+  </div>
 
-  <section class="panel" id="panel-db" aria-labelledby="h-db">
-    <div class="panel-header">
-      <h2 id="h-db">Base de datos</h2>
-      <span class="status-pill" id="db-status">—</span>
-    </div>
-    <div class="panel-body" id="db-body">
-      <p class="sin-datos">Cargando…</p>
-    </div>
-  </section>
+  <main class="grid">
 
-  <section class="panel" id="panel-meta" aria-labelledby="h-meta">
-    <div class="panel-header">
-      <h2 id="h-meta">Meta / WhatsApp</h2>
-      <span class="status-pill" id="meta-status">—</span>
-    </div>
-    <div class="panel-body" id="meta-body">
-      <p class="sin-datos">Cargando…</p>
-    </div>
-  </section>
+    <section class="card col-12" id="panel-n8n" aria-labelledby="h-n8n">
+      <div class="card-head">
+        <h2 id="h-n8n">Salud — n8n</h2>
+        <span class="pill" id="n8n-status">—</span>
+      </div>
+      <div class="card-body" id="n8n-body">
+        <p class="sin-datos">Cargando…</p>
+      </div>
+    </section>
 
-  <section class="panel" id="panel-infra" aria-labelledby="h-infra">
-    <div class="panel-header">
-      <h2 id="h-infra">Infraestructura</h2>
-      <span class="status-pill" id="infra-status">—</span>
-    </div>
-    <div class="panel-body" id="infra-body">
-      <p class="sin-datos">Cargando…</p>
-    </div>
-  </section>
+    <section class="card col-4" id="panel-db" aria-labelledby="h-db">
+      <div class="card-head">
+        <h2 id="h-db">Base de datos</h2>
+        <span class="pill" id="db-status">—</span>
+      </div>
+      <div class="card-body" id="db-body">
+        <p class="sin-datos">Cargando…</p>
+      </div>
+    </section>
 
-  <section class="panel panel-wide" id="panel-negocio" aria-labelledby="h-negocio">
-    <div class="panel-header">
-      <h2 id="h-negocio">Turnos / Negocio</h2>
-    </div>
-    <div class="panel-body" id="negocio-body">
-      <p class="sin-datos">Cargando…</p>
-    </div>
-  </section>
+    <section class="card col-4" id="panel-meta" aria-labelledby="h-meta">
+      <div class="card-head">
+        <h2 id="h-meta">Meta / WhatsApp</h2>
+        <span class="pill" id="meta-status">—</span>
+      </div>
+      <div class="card-body" id="meta-body">
+        <p class="sin-datos">Cargando…</p>
+      </div>
+    </section>
 
-  <section class="panel" id="panel-costos" aria-labelledby="h-costos">
-    <div class="panel-header">
-      <h2 id="h-costos">Costos <span class="tag-estimado">estimado</span></h2>
-    </div>
-    <div class="panel-body" id="costos-body">
-      <p class="sin-datos">Cargando…</p>
-    </div>
-  </section>
+    <section class="card col-4" id="panel-infra" aria-labelledby="h-infra">
+      <div class="card-head">
+        <h2 id="h-infra">Infraestructura</h2>
+        <span class="pill" id="infra-status">—</span>
+      </div>
+      <div class="card-body" id="infra-body">
+        <p class="sin-datos">Cargando…</p>
+      </div>
+    </section>
 
-</main>
+    <section class="card col-8" id="panel-negocio" aria-labelledby="h-negocio">
+      <div class="card-head">
+        <h2 id="h-negocio">Turnos / Negocio</h2>
+      </div>
+      <div class="card-body" id="negocio-body">
+        <p class="sin-datos">Cargando…</p>
+      </div>
+    </section>
 
-<footer class="foot">
-  <p>Panel interno de uso personal — expedita-diagnostico. El backend
-  (WF5) vive en el repo <code>dental-clinic-bot</code>, no acá.</p>
-</footer>
+    <section class="card col-4" id="panel-costos" aria-labelledby="h-costos">
+      <div class="card-head">
+        <h2 id="h-costos">Costos <span class="tag-estimado">Estimado</span></h2>
+      </div>
+      <div class="card-body" id="costos-body">
+        <p class="sin-datos">Cargando…</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="foot">
+    <p>Panel interno de uso personal — expedita-diagnostico. El backend
+    (WF5) vive en el repo <code>dental-clinic-bot</code>, no acá.</p>
+  </footer>
+
+</div>
 
 <script src="app.js"></script>
 </body>
