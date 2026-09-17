@@ -19,6 +19,10 @@ const USE_MOCK =
 const TOKEN_STORAGE_KEY = "diagToken";
 const THEME_STORAGE_KEY = "diagTheme";
 
+// Última respuesta completa del webhook — se usa para repintar un panel tras
+// un reset sin necesidad de otro GET (ver resetearMedicion más abajo).
+let ultimoData = null;
+
 // ---------------------------------------------------------------------------
 // Helpers de formato — regla central: null/undefined => "sin datos", nunca 0.
 // ---------------------------------------------------------------------------
@@ -71,6 +75,22 @@ function fmtUltimaCorrida(at, horas) {
   if (!esDato(at)) return "sin datos";
   if (esDato(horas)) return `${fmtFecha(at)} (hace ${horas} h)`;
   return fmtFecha(at);
+}
+
+// Texto de "midiendo desde" a partir del bloque `periodo` (negocio.periodo o
+// negocio.costos.periodo, con anclas independientes). null => no mostrar nada.
+function fmtPeriodoDesde(periodo) {
+  if (!periodo || periodo.modo === "historico" || !esDato(periodo.desde)) {
+    return null;
+  }
+  if (periodo.estado === "pendiente") {
+    return `Empieza el ${fmtFecha(periodo.desde)}`;
+  }
+  let txt = `Midiendo desde ${fmtFecha(periodo.desde)}`;
+  if (esDato(periodo.dias)) {
+    txt += ` (${periodo.dias} día${periodo.dias === 1 ? "" : "s"})`;
+  }
+  return txt;
 }
 
 // ---------------------------------------------------------------------------
@@ -169,6 +189,30 @@ function renderStats(container, items, opts) {
     wrap.appendChild(stat);
   }
   container.appendChild(wrap);
+}
+
+// Tabla simple de dos columnas (usada por turnos.por_tipo, por_tipo_periodo
+// y mensajes_por_categoria_periodo). No agrega nada si rows viene vacío/ausente.
+function renderTablaPares(container, rows, headerA, headerB, keyA, keyB) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+  const tablaWrap = el("div", { className: "tabla-simple table-wrap" });
+  const tabla = el("table");
+  const thead = el("thead");
+  const headRow = el("tr");
+  headRow.appendChild(el("th", { text: headerA }));
+  headRow.appendChild(el("th", { text: headerB }));
+  thead.appendChild(headRow);
+  tabla.appendChild(thead);
+  const tbody = el("tbody");
+  for (const item of rows) {
+    const tr = el("tr");
+    tr.appendChild(el("td", { text: fmt(item[keyA]) }));
+    tr.appendChild(el("td", { text: fmt(item[keyB]) }));
+    tbody.appendChild(tr);
+  }
+  tabla.appendChild(tbody);
+  tablaWrap.appendChild(tabla);
+  container.appendChild(tablaWrap);
 }
 
 function renderSinDatos(container, motivo) {
@@ -450,37 +494,51 @@ function renderNegocio(body, negocio) {
   try {
     clear(body);
 
+    const periodoTexto = fmtPeriodoDesde(negocio.periodo);
+    if (periodoTexto) {
+      body.appendChild(el("p", { className: "periodo-info", text: periodoTexto }));
+    }
+
     const turnos = negocio.turnos || {};
     const grupoTurnos = el("div", { className: "subgrupo" });
     grupoTurnos.appendChild(el("h3", { text: "Turnos" }));
     renderStats(grupoTurnos, [
       { label: "Creados (total)", value: fmt(turnos.creados_total) },
       { label: "Creados (mes)", value: fmt(turnos.creados_mes) },
+      { label: "Creados (período)", value: fmt(turnos.creados_periodo) },
       { label: "Cancelados — bot", value: fmt(turnos.cancelados_bot) },
       { label: "Cancelados — GCal manual", value: fmt(turnos.cancelados_gcal_manual) },
       { label: "Tasa de cancelación", value: fmtPct(turnos.tasa_cancelacion_pct) },
     ]);
-    if (Array.isArray(turnos.por_tipo) && turnos.por_tipo.length > 0) {
-      const tablaWrap = el("div", { className: "tabla-simple table-wrap" });
-      const tabla = el("table");
-      const thead = el("thead");
-      const headRow = el("tr");
-      headRow.appendChild(el("th", { text: "Especialidad" }));
-      headRow.appendChild(el("th", { text: "Cantidad" }));
-      thead.appendChild(headRow);
-      tabla.appendChild(thead);
-      const tbody = el("tbody");
-      for (const item of turnos.por_tipo) {
-        const tr = el("tr");
-        tr.appendChild(el("td", { text: fmt(item.especialidad) }));
-        tr.appendChild(el("td", { text: fmt(item.cantidad) }));
-        tbody.appendChild(tr);
-      }
-      tabla.appendChild(tbody);
-      tablaWrap.appendChild(tabla);
-      grupoTurnos.appendChild(tablaWrap);
-    }
+    renderTablaPares(
+      grupoTurnos,
+      turnos.por_tipo,
+      "Especialidad",
+      "Cantidad",
+      "especialidad",
+      "cantidad"
+    );
     body.appendChild(grupoTurnos);
+
+    const grupoCohorte = el("div", { className: "subgrupo" });
+    grupoCohorte.appendChild(el("h3", { text: "Cancelaciones — cohorte del período" }));
+    renderStats(grupoCohorte, [
+      { label: "Cancelados — bot", value: fmt(turnos.cancelados_bot_cohorte_periodo) },
+      { label: "Cancelados — GCal manual", value: fmt(turnos.cancelados_gcal_manual_cohorte_periodo) },
+      { label: "Tasa de cancelación", value: fmtPct(turnos.tasa_cancelacion_cohorte_periodo_pct) },
+    ]);
+    renderTablaPares(
+      grupoCohorte,
+      turnos.por_tipo_periodo,
+      "Especialidad",
+      "Cantidad",
+      "especialidad",
+      "cantidad"
+    );
+    if (turnos.cohorte_definicion) {
+      grupoCohorte.appendChild(el("p", { className: "nota", text: turnos.cohorte_definicion }));
+    }
+    body.appendChild(grupoCohorte);
 
     const recordatorios = negocio.recordatorios || {};
     const grupoRecordatorios = el("div", { className: "subgrupo" });
@@ -498,6 +556,7 @@ function renderNegocio(body, negocio) {
     renderStats(grupoPacientes, [
       { label: "Altas (total)", value: fmt(pacientes.altas_total) },
       { label: "Altas (mes)", value: fmt(pacientes.altas_mes) },
+      { label: "Altas (período)", value: fmt(pacientes.altas_periodo) },
     ]);
     body.appendChild(grupoPacientes);
 
@@ -522,6 +581,12 @@ function renderCostos(body, negocio) {
   }
   try {
     clear(body);
+
+    const periodoTexto = fmtPeriodoDesde(costos.periodo);
+    if (periodoTexto) {
+      body.appendChild(el("p", { className: "periodo-info", text: periodoTexto }));
+    }
+
     renderStats(
       body,
       [
@@ -538,6 +603,30 @@ function renderCostos(body, negocio) {
     if (costos.nota) {
       body.appendChild(el("p", { className: "nota", text: costos.nota }));
     }
+
+    const grupoPeriodo = el("div", { className: "subgrupo" });
+    grupoPeriodo.appendChild(el("h3", { text: "Período" }));
+    renderStats(
+      grupoPeriodo,
+      [
+        { label: "Mensajes medidos", value: fmt(costos.mensajes_medidos_periodo) },
+        { label: "Meta — medido", value: fmtArs(costos.meta_medido_periodo_ars) },
+        { label: "Meta — proyectado por mensaje", value: fmtArs(costos.meta_proyectado_per_message_periodo_ars) },
+        { label: "Meta — estimado", value: fmtArs(costos.meta_estimado_periodo_ars) },
+        { label: "Groq — estimado", value: fmtUsd(costos.groq_estimado_periodo_usd) },
+        { label: "Medición desde", value: fmtFecha(costos.medicion_desde_periodo) },
+      ],
+      { singleColumn: true }
+    );
+    renderTablaPares(
+      grupoPeriodo,
+      costos.mensajes_por_categoria_periodo,
+      "Categoría",
+      "Cantidad",
+      "categoria",
+      "cantidad"
+    );
+    body.appendChild(grupoPeriodo);
   } catch (err) {
     console.error("Error renderizando costos:", err);
     renderSinDatos(body, "sin datos");
@@ -601,6 +690,34 @@ function limpiarToken() {
 // Fetch principal
 // ---------------------------------------------------------------------------
 
+// Agrega X-Diag-Token a un fetch y reintenta una vez si el token vigente fue
+// rechazado (401/403) — compartido entre el GET de diagnóstico y el POST de
+// reset, que usan el mismo token.
+async function fetchConToken(url, opts) {
+  let token = getTokenGuardado() || pedirToken();
+  if (!token) {
+    throw new Error("Se necesita el token de diagnóstico para continuar.");
+  }
+
+  const conToken = (t) => ({
+    ...opts,
+    headers: { ...(opts && opts.headers), "X-Diag-Token": t },
+  });
+
+  let res = await fetch(url, conToken(token));
+
+  if (res.status === 401 || res.status === 403) {
+    limpiarToken();
+    token = pedirToken();
+    if (!token) {
+      throw new Error("Se necesita el token de diagnóstico para continuar.");
+    }
+    res = await fetch(url, conToken(token));
+  }
+
+  return res;
+}
+
 async function obtenerDiagnostico() {
   if (USE_MOCK) {
     const res = await fetch(MOCK_URL);
@@ -610,26 +727,7 @@ async function obtenerDiagnostico() {
     return res.json();
   }
 
-  let token = getTokenGuardado() || pedirToken();
-  if (!token) {
-    throw new Error("Se necesita el token de diagnóstico para continuar.");
-  }
-
-  let res = await fetch(WEBHOOK_URL, {
-    headers: { "X-Diag-Token": token },
-  });
-
-  if (res.status === 401 || res.status === 403) {
-    limpiarToken();
-    token = pedirToken();
-    if (!token) {
-      throw new Error("Se necesita el token de diagnóstico para continuar.");
-    }
-    res = await fetch(WEBHOOK_URL, {
-      headers: { "X-Diag-Token": token },
-    });
-  }
-
+  const res = await fetchConToken(WEBHOOK_URL);
   if (!res.ok) {
     throw new Error(`El webhook respondió HTTP ${res.status}`);
   }
@@ -649,6 +747,8 @@ function mostrarErrorGlobal(mensaje) {
 }
 
 function render(data) {
+  ultimoData = data;
+
   const envBadge = document.getElementById("env-badge");
   envBadge.textContent = USE_MOCK
     ? `${fmt(data.environment)} (mock local)`
@@ -684,6 +784,93 @@ function render(data) {
   renderCostos(document.getElementById("costos-body"), data.negocio);
 }
 
+// ---------------------------------------------------------------------------
+// Reset de la ventana de medición — POST al mismo endpoint del GET. Dos
+// botones independientes (Turnos/Negocio y Costos), con confirmación previa.
+// Actualiza solo el ancla de fecha con lo que devuelve el POST — no hace
+// falta otro GET para que el reset se note en pantalla.
+// ---------------------------------------------------------------------------
+
+const RESET_LABELS = {
+  negocio: "Turnos/Negocio",
+  costos: "Costos",
+};
+
+// Repinta únicamente el panel afectado con el nuevo `desde` — los campos
+// _periodo (creados_periodo, etc.) quedan como estaban hasta el próximo
+// "Actualizar", que es cuando el backend los recalcula sobre la ventana nueva.
+function aplicarResetLocal(ambito, desde) {
+  if (!ultimoData) return;
+  const negocio = ultimoData.negocio || (ultimoData.negocio = {});
+  const periodoNuevo = {
+    modo: "desde_ancla",
+    desde,
+    hasta: null,
+    dias: null,
+    estado: "activo",
+    origen: "config",
+  };
+
+  if (ambito === "negocio") {
+    negocio.periodo = periodoNuevo;
+    renderNegocio(document.getElementById("negocio-body"), negocio);
+  } else {
+    negocio.costos = negocio.costos || {};
+    negocio.costos.periodo = periodoNuevo;
+    renderCostos(document.getElementById("costos-body"), negocio);
+  }
+}
+
+async function resetearMedicion(ambito) {
+  const confirmado = window.confirm(
+    `¿Resetear la medición de ${RESET_LABELS[ambito]} a partir de ahora?`
+  );
+  if (!confirmado) return;
+
+  const boton = document.getElementById(`btn-reset-${ambito}`);
+  boton.disabled = true;
+  mostrarErrorGlobal(null);
+  try {
+    if (USE_MOCK) {
+      // Sin backend real en modo mock local: simula el reset para poder
+      // probar la UI (ver .claude/skills/diagnostico-qa/SKILL.md).
+      aplicarResetLocal(ambito, new Date().toISOString());
+      return;
+    }
+
+    const res = await fetchConToken(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accion: "reset", ambito }),
+    });
+
+    if (res.status === 400) {
+      const cuerpo = await res.json().catch(() => null);
+      throw new Error(
+        `No se pudo resetear: ${(cuerpo && cuerpo.detalle) || "solicitud inválida"}`
+      );
+    }
+    if (res.status === 500) {
+      const cuerpo = await res.json().catch(() => null);
+      const detalle = cuerpo && cuerpo.detalle ? `: ${cuerpo.detalle}` : ".";
+      throw new Error(`El reset falló del lado del backend, no se aplicó nada${detalle}`);
+    }
+    if (!res.ok) {
+      throw new Error(`El webhook respondió HTTP ${res.status}`);
+    }
+
+    const cuerpo = await res.json();
+    const desde =
+      ambito === "negocio" ? cuerpo.medicion_negocio_desde : cuerpo.medicion_costos_desde;
+    aplicarResetLocal(ambito, desde);
+  } catch (err) {
+    console.error("Error reseteando medición:", err);
+    mostrarErrorGlobal(err.message || "No se pudo resetear la medición.");
+  } finally {
+    boton.disabled = false;
+  }
+}
+
 async function actualizar() {
   const boton = document.getElementById("btn-actualizar");
   boton.disabled = true;
@@ -704,4 +891,6 @@ document.getElementById("btn-theme").addEventListener("click", () => {
   applyTheme(getEffectiveTheme() === "dark" ? "light" : "dark");
 });
 document.getElementById("btn-actualizar").addEventListener("click", actualizar);
+document.getElementById("btn-reset-negocio").addEventListener("click", () => resetearMedicion("negocio"));
+document.getElementById("btn-reset-costos").addEventListener("click", () => resetearMedicion("costos"));
 actualizar();

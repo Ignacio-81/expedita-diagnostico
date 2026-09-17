@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-27T14:32:00-03:00",
+  "generated_at": "2026-09-17T14:32:00-03:00",
   "environment": "staging",
   "salud": {
     "n8n": {
@@ -11,28 +11,28 @@
           "ejecuciones_ok_24h": 142,
           "ejecuciones_error_24h": 3,
           "tasa_error_pct": 2.1,
-          "ultimo_error_at": "2026-08-27T09:12:00-03:00",
+          "ultimo_error_at": "2026-09-17T09:12:00-03:00",
           "ultimo_error_mensaje": "Timeout Supabase",
           "ejecuciones_colgadas": 0
         },
         {
           "nombre": "WF2_Sync_Feriados",
           "activo": true,
-          "ultima_corrida_ok_at": "2026-08-27T03:00:04-03:00",
+          "ultima_corrida_ok_at": "2026-09-17T03:00:04-03:00",
           "horas_desde_ultima_corrida": 11.5,
           "ejecuciones_error_24h": 0
         },
         {
           "nombre": "WF3_Recordatorio_Turnos",
           "activo": true,
-          "ultima_corrida_ok_at": "2026-08-27T10:00:02-03:00",
+          "ultima_corrida_ok_at": "2026-09-17T10:00:02-03:00",
           "horas_desde_ultima_corrida": 4.5,
           "ejecuciones_error_24h": 0
         },
         {
           "nombre": "WF4_Sync_GCal_Appointments",
           "activo": true,
-          "ultima_corrida_ok_at": "2026-08-27T14:00:01-03:00",
+          "ultima_corrida_ok_at": "2026-09-17T14:00:01-03:00",
           "horas_desde_ultima_corrida": 0.5,
           "ejecuciones_error_24h": 0
         }
@@ -59,16 +59,33 @@
     }
   },
   "negocio": {
+    "periodo": {
+      "modo": "desde_ancla",
+      "desde": "2026-09-05T00:00:00-03:00",
+      "hasta": null,
+      "dias": 12,
+      "estado": "activo",
+      "origen": "config"
+    },
     "turnos": {
       "creados_total": 63,
       "creados_mes": 24,
+      "creados_periodo": 9,
       "cancelados_bot": 5,
       "cancelados_gcal_manual": 2,
+      "cancelados_bot_cohorte_periodo": 1,
+      "cancelados_gcal_manual_cohorte_periodo": 0,
       "tasa_cancelacion_pct": 11.1,
+      "tasa_cancelacion_cohorte_periodo_pct": 11.1,
       "por_tipo": [
         { "especialidad": "Consulta general", "cantidad": 40 },
         { "especialidad": "Control", "cantidad": 23 }
-      ]
+      ],
+      "por_tipo_periodo": [
+        { "especialidad": "Consulta general", "cantidad": 6 },
+        { "especialidad": "Control", "cantidad": 3 }
+      ],
+      "cohorte_definicion": "Cancelaciones de turnos creados dentro de la ventana, sin importar cuándo se cancelaron — no son cancelaciones ocurridas en la ventana."
     },
     "recordatorios": {
       "confirmados_manana": 8,
@@ -77,12 +94,31 @@
     },
     "pacientes": {
       "altas_total": 38,
-      "altas_mes": 12
+      "altas_mes": 12,
+      "altas_periodo": 5
     },
     "costos": {
+      "periodo": {
+        "modo": "desde_ancla",
+        "desde": "2026-09-14T00:00:00-03:00",
+        "hasta": null,
+        "dias": 3,
+        "estado": "activo",
+        "origen": "config"
+      },
       "meta_estimado_ars": 22608,
       "meta_medido_ars": null,
       "groq_estimado_usd": 0.46,
+      "mensajes_medidos_periodo": 210,
+      "mensajes_por_categoria_periodo": [
+        { "categoria": "utility", "cantidad": 150 },
+        { "categoria": "marketing", "cantidad": 60 }
+      ],
+      "meta_medido_periodo_ars": 6800,
+      "meta_proyectado_per_message_periodo_ars": 32.4,
+      "medicion_desde_periodo": "2026-09-14T00:00:00-03:00",
+      "meta_estimado_periodo_ars": null,
+      "groq_estimado_periodo_usd": null,
       "nota": "estimado — no hay medición real de pricing_category ni de tokens todavía"
     },
     "validacion_telefono": {

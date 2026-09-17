@@ -114,7 +114,8 @@ docs/Especificaciones_de_la_aplicacion.md   # +sección "Panel de Diagnóstico (
 
 **Endpoint:** `GET /webhook/diagnostico`
 **Header:** `X-Diag-Token: <DIAG_TOKEN de staging.overrides.json>`
-**Sin query params** — una sola versión de la respuesta, ya que solo existe Staging.
+**Query params opcionales:** `desde`/`hasta` para una consulta ad-hoc de una
+sola vez, sin escribir nada en el backend — ver §6.5.
 
 ```json
 {
@@ -160,16 +161,33 @@ docs/Especificaciones_de_la_aplicacion.md   # +sección "Panel de Diagnóstico (
     }
   },
   "negocio": {
+    "periodo": {
+      "modo": "desde_ancla",
+      "desde": "2026-09-05T00:00:00-03:00",
+      "hasta": null,
+      "dias": 12,
+      "estado": "activo",
+      "origen": "config"
+    },
     "turnos": {
       "creados_total": 63,
       "creados_mes": 24,
+      "creados_periodo": 9,
       "cancelados_bot": 5,
       "cancelados_gcal_manual": 2,
+      "cancelados_bot_cohorte_periodo": 1,
+      "cancelados_gcal_manual_cohorte_periodo": 0,
       "tasa_cancelacion_pct": 11.1,
+      "tasa_cancelacion_cohorte_periodo_pct": 11.1,
       "por_tipo": [
         { "especialidad": "Consulta general", "cantidad": 40 },
         { "especialidad": "Control", "cantidad": 23 }
-      ]
+      ],
+      "por_tipo_periodo": [
+        { "especialidad": "Consulta general", "cantidad": 6 },
+        { "especialidad": "Control", "cantidad": 3 }
+      ],
+      "cohorte_definicion": "Cancelaciones de turnos creados dentro de la ventana, sin importar cuándo se cancelaron — no son cancelaciones ocurridas en la ventana."
     },
     "recordatorios": {
       "confirmados_manana": 8,
@@ -178,12 +196,31 @@ docs/Especificaciones_de_la_aplicacion.md   # +sección "Panel de Diagnóstico (
     },
     "pacientes": {
       "altas_total": 38,
-      "altas_mes": 12
+      "altas_mes": 12,
+      "altas_periodo": 5
     },
     "costos": {
+      "periodo": {
+        "modo": "desde_ancla",
+        "desde": "2026-09-14T00:00:00-03:00",
+        "hasta": null,
+        "dias": 3,
+        "estado": "activo",
+        "origen": "config"
+      },
       "meta_estimado_ars": 22608,
       "meta_medido_ars": null,
       "groq_estimado_usd": 0.46,
+      "mensajes_medidos_periodo": 210,
+      "mensajes_por_categoria_periodo": [
+        { "categoria": "utility", "cantidad": 150 },
+        { "categoria": "marketing", "cantidad": 60 }
+      ],
+      "meta_medido_periodo_ars": 6800,
+      "meta_proyectado_per_message_periodo_ars": 32.4,
+      "medicion_desde_periodo": "2026-09-14T00:00:00-03:00",
+      "meta_estimado_periodo_ars": null,
+      "groq_estimado_periodo_usd": null,
       "nota": "estimado — no hay medición real de pricing_category ni de tokens todavía"
     },
     "validacion_telefono": {
@@ -195,7 +232,92 @@ docs/Especificaciones_de_la_aplicacion.md   # +sección "Panel de Diagnóstico (
 
 **Regla para el frontend:** un valor `null` se muestra como "sin datos" o se
 oculta, nunca como `0` — importa sobre todo en costos, donde "no lo mido
-todavía" y "medí cero" son cosas distintas.
+todavía" y "medí cero" son cosas distintas. Aplica también a los campos
+`_periodo` de más arriba: `meta_estimado_periodo_ars` y
+`groq_estimado_periodo_usd` vienen `null` a propósito con ventanas de menos
+de 7 días (no hay muestra suficiente para estimar).
+
+### 6.1 Ventana de medición (`periodo`)
+
+`negocio.periodo` y `negocio.costos.periodo` tienen la misma forma pero son
+anclas **independientes** — pueden estar en modos distintos al mismo tiempo
+(por ejemplo Turnos/Negocio en `desde_ancla` y Costos todavía en
+`historico`).
+
+| Campo | Significado |
+|---|---|
+| `modo` | `"historico"` (comportamiento de siempre, sin ventana) · `"desde_ancla"` (alguien reseteó antes; ventana desde esa fecha hasta ahora) · `"consulta"` (pedida por query params, no escribe nada) |
+| `desde` | Inicio de la ventana. `null` en modo `"historico"` |
+| `hasta` | `null` = ventana abierta, termina "ahora" |
+| `dias` | Duración en días, mínimo 1. `null` en modo `"historico"` |
+| `estado` | `"activo"` · `"pendiente"` (la ventana arranca en el futuro) |
+| `origen` | `"config"` (ancla guardada) · `"query"` (pedida por query params) |
+
+Regla de UI: en `historico` no se muestra fecha; en `pendiente` se muestra
+"empieza el `<fecha>`"; en `activo` se muestra la fecha normal (y
+opcionalmente `dias`).
+
+### 6.2 Campos `_periodo`
+
+Son aditivos — todo lo que ya se mostraba (`_total`, `_mes`) sigue
+funcionando igual. Se muestran en primer plano junto a los históricos para
+que el reset se note en pantalla:
+
+- `negocio.turnos`: `creados_periodo`, `cancelados_bot_cohorte_periodo`,
+  `cancelados_gcal_manual_cohorte_periodo`,
+  `tasa_cancelacion_cohorte_periodo_pct` (puede ser `null`),
+  `por_tipo_periodo`, `cohorte_definicion` (string fijo — son cancelaciones
+  de una **cohorte** de turnos creados en la ventana, no cancelaciones
+  ocurridas en la ventana).
+- `negocio.pacientes`: `altas_periodo`.
+- `negocio.costos`: `mensajes_medidos_periodo`,
+  `mensajes_por_categoria_periodo`, `meta_medido_periodo_ars`,
+  `meta_proyectado_per_message_periodo_ars`, `medicion_desde_periodo`,
+  `meta_estimado_periodo_ars`, `groq_estimado_periodo_usd`. Todos pueden
+  venir `null` (mostrar "sin datos suficientes", nunca `0`).
+
+### 6.3 Reset de la ventana (`POST /webhook/diagnostico`)
+
+Mismo path que el GET, mismo token.
+
+```
+POST /webhook/diagnostico
+Header: X-Diag-Token: <token>
+Content-Type: application/json
+
+{"accion":"reset","ambito":"negocio"|"costos","desde":null}
+```
+
+- `ambito`: el frontend siempre manda `"negocio"` o `"costos"` — un botón
+  por panel. (`"todo"` existe para uso manual/curl, no lo usa el frontend.)
+- `desde`: se omite (o `null`) para "resetear a ahora" — el caso normal del
+  botón. Mandar una fecha ahí es el mecanismo manual para corregir un reset
+  hecho por error (usando el `desde_anterior` que devuelve la respuesta),
+  no tiene UI dedicada.
+
+| HTTP | Body | UI |
+|---|---|---|
+| 200 | `{"ok":true,"ambito":"...","medicion_negocio_desde":"...","medicion_costos_desde":"...","desde_anterior":{"negocio":"...\|null","costos":"...\|null"},"aplicado_at":"..."}` | Reset aplicado — usar `medicion_negocio_desde`/`medicion_costos_desde` (según `ambito`) para refrescar el encabezado de fecha de ese panel, sin otro GET. |
+| 400 | `{"error":"bad_request","detalle":"..."}` | No debería pasar si siempre se manda `accion:"reset"` y `ambito` válido. |
+| 401/403 | `{"error":"unauthorized"}` | Mismo manejo que el GET: limpiar token guardado y volver a pedirlo. |
+| 500 | `{"error":"internal","detalle":"..."}` | El reset falló del lado del backend, no se aplicó nada. |
+
+No hay auditoría/historial de resets en el backend — si se resetea por
+error, la única corrección es un nuevo POST con `desde_anterior` en `desde`.
+
+### 6.4 Consulta ad-hoc por query params
+
+```
+GET /webhook/diagnostico?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+```
+
+- `desde` sin `hasta` = ventana abierta hasta ahora.
+- `hasta` sin `desde` se ignora (no rompe nada, solo no define ventana).
+- `desde > hasta`, o fechas no parseables → `400 {"error":"bad_request","detalle":"..."}`.
+- No escribe nada en el backend — es un reporte de una sola vez, con
+  `periodo.modo: "consulta"` en la respuesta. El frontend v1 no ofrece UI
+  para esto (no hace falta para el caso de uso de Ignacio); queda
+  disponible para invocación manual si hace falta.
 
 ---
 
@@ -299,6 +421,11 @@ Mecanismo v1:
 - Bloque con `status: "error"` o ausente → "sin datos" en ese bloque, sin
   romper el resto.
 - Sin dependencias de CDN si se puede evitar.
+- Botón de reset en Turnos/Negocio y otro, independiente, en Costos — con
+  confirmación explícita antes del POST (ver §6.3).
+- Campo "midiendo desde" en cada uno de esos dos paneles usando
+  `periodo.desde` (ver §6.1), y los campos `_periodo` (§6.2) en primer plano
+  junto a los históricos.
 
 ---
 
