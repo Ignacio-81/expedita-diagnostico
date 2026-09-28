@@ -1,0 +1,135 @@
+{
+  "generated_at": "2026-09-28T10:15:00-03:00",
+  "environment": "staging",
+  "salud": {
+    "n8n": {
+      "status": "up",
+      "workflows": [
+        {
+          "nombre": "WF1_Bot_WhatsApp",
+          "activo": true,
+          "ejecuciones_ok_24h": 57,
+          "ejecuciones_error_24h": 1,
+          "tasa_error_pct": 1.7,
+          "ultimo_error_at": "2026-09-28T09:12:03-03:00",
+          "ultimo_error_mensaje": "Error en el nodo \"GET slots GCal\"",
+          "ejecuciones_colgadas": 0
+        },
+        {
+          "nombre": "WF2_Sync_Feriados",
+          "activo": true,
+          "ultima_corrida_ok_at": "2026-09-28T03:00:02-03:00",
+          "horas_desde_ultima_corrida": 7.3,
+          "ejecuciones_error_24h": 0,
+          "ejecuciones_colgadas": 0
+        },
+        {
+          "nombre": "WF3_Recordatorio_Turnos",
+          "activo": true,
+          "ultima_corrida_ok_at": "2026-09-28T08:00:04-03:00",
+          "horas_desde_ultima_corrida": 2.3,
+          "ejecuciones_error_24h": 0,
+          "ejecuciones_colgadas": 0
+        },
+        {
+          "nombre": "WF4_Sync_GCal_Appointments",
+          "activo": true,
+          "ultima_corrida_ok_at": "2026-09-28T10:00:01-03:00",
+          "horas_desde_ultima_corrida": 0.3,
+          "ejecuciones_error_24h": 0,
+          "ejecuciones_colgadas": 0
+        },
+        {
+          "nombre": "WF5_Diagnostico",
+          "activo": true,
+          "ejecuciones_ok_24h": 6,
+          "ejecuciones_error_24h": 0,
+          "tasa_error_pct": 0,
+          "ultimo_error_at": null,
+          "ultimo_error_mensaje": null,
+          "ejecuciones_colgadas": 0
+        },
+        {
+          "nombre": "WF6_Auto_Cancelacion",
+          "activo": true,
+          "ultima_corrida_ok_at": "2026-09-28T10:15:00-03:00",
+          "horas_desde_ultima_corrida": 0,
+          "ejecuciones_error_24h": 0,
+          "ejecuciones_colgadas": 0
+        }
+      ],
+      "tasa_error_global_pct": 0.6,
+      "duracion_promedio_wf1_ms": 2150
+    },
+    "db": {
+      "status": "ok",
+      "latencia_ms": 480,
+      "espacio_usado_mb": 42.3,
+      "espacio_limite_mb": 500,
+      "turnos_huerfanos": 0
+    },
+    "meta": {
+      "status": "ok",
+      "quality_rating": "GREEN",
+      "webhooks_ok": true,
+      "token_dias_restantes": null
+    },
+    "infra": {
+      "tunnel_status": "up",
+      "redis_memoria_mb": 1.4
+    }
+  },
+  "negocio": {
+    "reset_desde": null,
+    "turnos": {
+      "creados_total": 63,
+      "creados_mes": 24,
+      "cancelados_bot": 5,
+      "cancelados_gcal_manual": 2,
+      "tasa_cancelacion_pct": 11.1,
+      "por_tipo": [
+        {
+          "especialidad": "Consulta/Limpieza",
+          "cantidad": 40
+        },
+        {
+          "especialidad": "Ortodoncia",
+          "cantidad": 23
+        }
+      ],
+      "cohorte_definicion": "turnos que hoy están en estado Cancelled, contados según su fecha de creación (la base no tiene fecha de cancelación) — desde 'reset_desde' si hay un reset activo, o sin límite si no lo hay"
+    },
+    "recordatorios": {
+      "confirmados_manana": 4,
+      "recordatorios_enviados": 4,
+      "tasa_exito_pct": 100
+    },
+    "pacientes": {
+      "altas_total": 38,
+      "altas_mes": 11
+    },
+    "costos": {
+      "reset_desde": null,
+      "meta_estimado_ars": 22608,
+      "meta_medido_ars": 1507,
+      "meta_proyectado_per_message_ars": 6782,
+      "meta_medido_proyeccion_mes_ars": 1615,
+      "pricing_per_message_vigente": false,
+      "medicion_desde": "2026-09-01T09:14:22.000-03:00",
+      "medicion_dias": 28,
+      "medicion_mes_completo": true,
+      "mensajes_medidos": 180,
+      "mensajes_por_categoria": {
+        "service": 140,
+        "utility": 40,
+        "marketing": 0,
+        "authentication": 0
+      },
+      "groq_estimado_usd": 0.46,
+      "nota": "meta_medido_ars: costo REAL de los mensajes capturados por categoría de pricing desde medicion_desde (ventana que puede ser parcial: ver medicion_dias / medicion_mes_completo). meta_estimado_ars y groq_estimado_usd: proyección a 30 días a partir de turnos/día (requieren ≥7 días de datos desde el último reset; si no, quedan en null). Los tokens de Groq no se miden todavía — ese número siempre es estimado."
+    },
+    "validacion_telefono": {
+      "rechazos_24h": null
+    }
+  }
+}

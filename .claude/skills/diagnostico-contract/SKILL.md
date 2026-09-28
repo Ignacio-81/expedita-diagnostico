@@ -6,182 +6,109 @@ description: >
   src/app.js, src/index.html, o cualquier lógica de parseo/render del panel.
 ---
 
-# Contrato JSON del panel de diagnóstico
+# Contrato JSON del panel de diagnóstico (v2.0)
 
-El backend (WF5, en `dental-clinic-bot`) expone un único endpoint (GET, con
-query params opcionales para consulta ad-hoc) más un POST de reset, ambos
-documentados acá y en
-[docs/CONTRATO_JSON.md](../../../docs/CONTRATO_JSON.md) (misma fuente,
-mantener ambos sincronizados si el contrato cambia).
+El backend (WF5, en `dental-clinic-bot`) expone un único endpoint: GET para
+el snapshot y POST para el reset. Referencia completa (diccionario de campos
+con tipos y semántica de `null`) en
+[docs/CONTRATO_JSON.md](../../../docs/CONTRATO_JSON.md) — mantener ambos
+sincronizados si el contrato cambia. Las fases siguientes (contratos 3.0 →
+4.0) están en
+[docs/SPEC-frontend-contrato-v2-y-v3-2026-09.md](../../../docs/SPEC-frontend-contrato-v2-y-v3-2026-09.md)
+§4: **no implementarlas** hasta que Ignacio avise que el backend de esa
+versión está listo.
 
 ## Endpoint
 
 ```
-GET /webhook/diagnostico[?desde=YYYY-MM-DD&hasta=YYYY-MM-DD]
-Header: X-Diag-Token: <token>
+GET  /webhook/diagnostico          Header: X-Diag-Token: <token>
+POST /webhook/diagnostico          {"accion":"reset","ambito":"negocio"|"costos"}
 ```
 
-`desde`/`hasta` son opcionales — una consulta ad-hoc de una sola vez que no
-escribe nada en el backend (`periodo.modo: "consulta"` en la respuesta). El
-frontend v1 no ofrece UI para esto. El `fetch()` del navegador usa el UA
-real del browser, así que no le aplica la restricción de User-Agent de
-CLAUDE.md — esa restricción es para scripts (curl, verificación
-post-deploy), no para el frontend en sí.
+- **No hay consulta ad-hoc**: `?desde=&hasta=` se ignoran. No mandarlos.
+- Ambientes: allowlist **fija** en `src/app.js` — `staging` (default) y
+  `test` (`?env=test`, Develop/Test). **Nunca** aceptar una URL libre por
+  query param (se llevaría el token).
+- El `fetch()` del navegador usa el UA real del browser; la restricción de
+  User-Agent de CLAUDE.md es para scripts (curl, verificación).
+- 🚫 El agente **no** le pega a `staging` (ni GET ni POST de reset): se
+  desarrolla contra el mock. Validar contra `staging` lo hace Ignacio.
+
+## Versión de contrato
+
+- `contract_version` en la raíz; **ausente → `"2.0"`**.
+- `CONTRATOS_SOPORTADOS` en `src/app.js` (hoy `["2.0"]`).
+- MAYOR desconocido → banner de advertencia (`#contract-warning`) y se
+  renderiza igual lo que se pueda. Mismo MAYOR, MENOR desconocido → sin
+  banner.
+- La versión se muestra junto al badge de ambiente.
 
 ## Manejo de token (nunca hardcodear)
 
 - Si no hay token en `sessionStorage`, pedirlo con `prompt()`.
-- Guardar en `sessionStorage` (no `localStorage`) — dura la pestaña.
-- Ante `401`/`403` en la respuesta: limpiar el token guardado y volver a
-  pedirlo (puede haber rotado en `envs/staging.overrides.json` del otro
-  repo).
+- Clave **por ambiente**: `diagToken:staging` / `diagToken:test`.
+- `sessionStorage` (no `localStorage`) — dura la pestaña.
+- Ante `401`/`403`: limpiar el token guardado y volver a pedirlo.
 - El token **nunca** va escrito en `src/app.js` — ese archivo es público.
 
-## Forma de la respuesta
+## Forma de la respuesta (resumen — detalle en docs/CONTRATO_JSON.md)
 
-```json
-{
-  "generated_at": "2026-08-27T14:32:00-03:00",
-  "environment": "staging",
-  "salud": {
-    "n8n": {
-      "status": "up",
-      "workflows": [
-        {
-          "nombre": "WF1_Bot_WhatsApp",
-          "activo": true,
-          "ejecuciones_ok_24h": 142,
-          "ejecuciones_error_24h": 3,
-          "tasa_error_pct": 2.1,
-          "ultimo_error_at": "2026-08-27T09:12:00-03:00",
-          "ultimo_error_mensaje": "Timeout Supabase",
-          "ejecuciones_colgadas": 0
-        },
-        { "nombre": "WF2_Sync_Feriados", "activo": true, "ultima_corrida_ok_at": "...", "horas_desde_ultima_corrida": 11.5, "ejecuciones_error_24h": 0 },
-        { "nombre": "WF3_Recordatorio_Turnos", "activo": true, "ultima_corrida_ok_at": "...", "horas_desde_ultima_corrida": 4.5, "ejecuciones_error_24h": 0 },
-        { "nombre": "WF4_Sync_GCal_Appointments", "activo": true, "ultima_corrida_ok_at": "...", "horas_desde_ultima_corrida": 0.5, "ejecuciones_error_24h": 0 }
-      ],
-      "tasa_error_global_pct": 1.8,
-      "duracion_promedio_wf1_ms": 3400
-    },
-    "db": {
-      "status": "ok",
-      "latencia_ms": 210,
-      "espacio_usado_mb": 187,
-      "espacio_limite_mb": 500,
-      "turnos_huerfanos": 1
-    },
-    "meta": {
-      "status": "ok",
-      "quality_rating": "GREEN",
-      "webhooks_ok": true,
-      "token_dias_restantes": null
-    },
-    "infra": {
-      "tunnel_status": "up",
-      "redis_memoria_mb": 8.2
-    }
-  },
-  "negocio": {
-    "periodo": {
-      "modo": "desde_ancla",
-      "desde": "2026-09-05T00:00:00-03:00",
-      "hasta": null,
-      "dias": 12,
-      "estado": "activo",
-      "origen": "config"
-    },
-    "turnos": {
-      "creados_total": 63,
-      "creados_mes": 24,
-      "creados_periodo": 9,
-      "cancelados_bot": 5,
-      "cancelados_gcal_manual": 2,
-      "cancelados_bot_cohorte_periodo": 1,
-      "cancelados_gcal_manual_cohorte_periodo": 0,
-      "tasa_cancelacion_pct": 11.1,
-      "tasa_cancelacion_cohorte_periodo_pct": 11.1,
-      "por_tipo": [{ "especialidad": "Consulta general", "cantidad": 40 }],
-      "por_tipo_periodo": [{ "especialidad": "Consulta general", "cantidad": 6 }],
-      "cohorte_definicion": "Cancelaciones de turnos creados dentro de la ventana, sin importar cuándo se cancelaron — no cancelaciones ocurridas en la ventana."
-    },
-    "recordatorios": {
-      "confirmados_manana": 8,
-      "recordatorios_enviados": 8,
-      "tasa_exito_pct": 100.0
-    },
-    "pacientes": { "altas_total": 38, "altas_mes": 12, "altas_periodo": 5 },
-    "costos": {
-      "periodo": {
-        "modo": "desde_ancla",
-        "desde": "2026-09-14T00:00:00-03:00",
-        "hasta": null,
-        "dias": 3,
-        "estado": "activo",
-        "origen": "config"
-      },
-      "meta_estimado_ars": 22608,
-      "meta_medido_ars": null,
-      "groq_estimado_usd": 0.46,
-      "mensajes_medidos_periodo": 210,
-      "mensajes_por_categoria_periodo": [{ "categoria": "utility", "cantidad": 150 }],
-      "meta_medido_periodo_ars": 6800,
-      "meta_proyectado_per_message_periodo_ars": 32.4,
-      "medicion_desde_periodo": "2026-09-14T00:00:00-03:00",
-      "meta_estimado_periodo_ars": null,
-      "groq_estimado_periodo_usd": null,
-      "nota": "estimado — no hay medición real de pricing_category ni de tokens todavía"
-    },
-    "validacion_telefono": { "rechazos_24h": 0 }
-  }
-}
+```
+generated_at, environment ("staging"|"test"), [contract_version]
+salud.n8n      status, [error_detalle], workflows[6], tasa_error_global_pct, duracion_promedio_wf1_ms
+               no-cron (WF1, WF5): activo, ejecuciones_ok_24h, ejecuciones_error_24h, tasa_error_pct,
+                                   ultimo_error_at, ultimo_error_mensaje, ejecuciones_colgadas
+               cron (WF2, WF3, WF4, WF6): activo, ultima_corrida_ok_at, horas_desde_ultima_corrida,
+                                   ejecuciones_error_24h, ejecuciones_colgadas
+salud.db       status, latencia_ms, espacio_usado_mb (proyecto Supabase entero), espacio_limite_mb, turnos_huerfanos
+salud.meta     status, quality_rating, webhooks_ok, token_dias_restantes (null siempre → no mostrar)
+salud.infra    [status:"error" + error_detalle], tunnel_status (up|degradado|down|n/a), [tunnel_detalle], redis_memoria_mb
+negocio.reset_desde                 ancla de Turnos/Negocio (null = histórico completo; puede ser futura)
+negocio.turnos                      creados_total, creados_mes, cancelados_bot, cancelados_gcal_manual,
+                                    tasa_cancelacion_pct, por_tipo[{especialidad,cantidad}], cohorte_definicion
+negocio.recordatorios               confirmados_manana (= agendados), recordatorios_enviados, tasa_exito_pct
+negocio.pacientes                   altas_total, altas_mes
+negocio.costos.reset_desde          ancla PROPIA de Costos (null = mes calendario en curso)
+negocio.costos                      meta_medido_ars, meta_proyectado_per_message_ars, meta_medido_proyeccion_mes_ars,
+                                    meta_estimado_ars, groq_estimado_usd, pricing_per_message_vigente,
+                                    medicion_desde (con ms), medicion_dias, medicion_mes_completo (null con reset),
+                                    mensajes_medidos, mensajes_por_categoria {service,utility,marketing,authentication},
+                                    nota, [medicion_status:"error" + medicion_error_detalle]
+negocio.validacion_telefono         rechazos_24h (null siempre → no mostrar)
 ```
 
-Ejemplo completo, usable para desarrollar sin WF5 desplegado:
-`docs/mock-response.json`.
+**Ya NO existen (no leerlos):** `negocio.periodo`, `negocio.costos.periodo`
+y cualquier campo `_periodo`.
 
-## Regla de `null` vs `0` (crítica en costos)
+## Regla de `null` vs `0`
 
-Un valor `null` se muestra como "sin datos" o se oculta — **nunca** como
-`0`. Aplica sobre todo a `negocio.costos.meta_medido_ars`: hoy siempre es
-`null` porque no hay medición real todavía, y confundirlo con "costo cero"
-sería directamente engañoso. Cuando en el futuro se instrumente la medición
-real, el campo empieza a traer un número y el frontend ya debe estar
-preparado para mostrarlo sin cambios de código. Los `_periodo` estimados
-(`meta_estimado_periodo_ars`, `groq_estimado_periodo_usd`) vienen `null` a
-propósito con ventanas de menos de 7 días — mismo tratamiento.
-
-## Ventana de medición (`periodo`) y reset
-
-`negocio.periodo` y `negocio.costos.periodo` son anclas independientes
-(pueden estar en modos distintos a la vez). `modo`: `"historico"` (sin
-ventana, no mostrar fecha) · `"desde_ancla"` (reset previo) · `"consulta"`
-(query params). `estado`: `"activo"` o `"pendiente"` (mostrar "empieza el
-`<fecha>`"). Detalle completo, incluido el POST de reset
-(`{"accion":"reset","ambito":"negocio"|"costos"}`, dos botones
-independientes con confirmación previa) en
-[docs/CONTRATO_JSON.md](../../../docs/CONTRATO_JSON.md).
+`null`/ausente → "sin datos" (o se oculta si el contrato lo dice). `0` es un
+dato medido → `0` / `$ 0`. Importa sobre todo en costos
+(`meta_medido_ars: 0` es legítimo: solo mensajes gratis).
 
 ## Bloque con `status: "error"` o ausente
 
-Cada bloque de `salud` (`n8n`, `db`, `meta`, `infra`) puede llegar con
-`status: "error"`, o el bloque puede faltar directamente del JSON (WF5 tiene
-`continueOnFail` + timeout 5s por bloque). En ese caso: mostrar "sin datos"
-**solo en ese bloque**, sin que rompa el render del resto de la página. Esto
-es lo primero que hay que probar manualmente después de tocar `app.js` — ver
-`.claude/skills/diagnostico-qa/SKILL.md`.
+- **Ausente** → "sin datos" solo en ese bloque.
+- **Presente con `status: "error"`** → se renderizan igual sus campos (los
+  `null` como "sin datos") **y** se muestra `error_detalle`. Vale para los
+  bloques de `salud`, para `turnos`/`recordatorios`/`pacientes`, y para
+  costos vía `medicion_status`/`medicion_error_detalle`.
+- Ningún bloque roto tira abajo el resto (cada render va en su `try/catch`).
+- Nunca acceder a subcampos sin guarda; nunca comparar fechas como string
+  (`new Date(...)`).
 
-## Requisitos de UI (§9 de la spec)
+## Requisitos de UI
 
-- Una página, sin routing.
-- Fetch al cargar + botón "Actualizar" — sin auto-refresh/polling.
-- Bloques a renderizar: Salud n8n (tabla por workflow, no solo tasa
-  global), Base de datos, Meta/WhatsApp, Infraestructura, Turnos/Negocio,
-  Costos (marcados visualmente como estimados).
-- Mostrar "Última actualización" usando `generated_at` de la respuesta.
-- Sin dependencias de CDN si se puede evitar (el panel debe poder abrirse
-  aunque un CDN externo esté caído).
-- Botón de reset en Turnos/Negocio y otro, independiente, en Costos, con
-  confirmación explícita antes del POST.
-- "Midiendo desde" por panel usando `periodo.desde`, con los campos
-  `_periodo` en primer plano junto a los históricos.
+- Una página, sin routing. Fetch al cargar + botón "Actualizar" (sin
+  auto-refresh hasta el contrato 4.0, y ahí opt-in).
+- Negocio: encabezado "Histórico completo (sin reset)" / "Midiendo desde…"
+  / "Empieza el…". Con reset, una sola cifra "desde el reset" para creados
+  y altas; sin reset, histórico + mes en curso.
+- Costos: con `pricing_per_message_vigente: false` la cifra destacada es
+  `meta_proyectado_per_message_ars`; con `true`, `meta_medido_ars`.
+- Reset: dos botones independientes con confirmación previa, handler
+  entero en `try/catch`, error visible. Tras el `200` → **GET completo**; si
+  falla, parchear solo el encabezado y avisar. Mostrar
+  `desde_anterior.<ambito>` (única forma de deshacer un reset).
+- DOM con `createElement`/`textContent`, nunca `innerHTML` con datos del
+  backend. Sin CDN, sin dependencias.

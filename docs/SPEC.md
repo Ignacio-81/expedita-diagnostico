@@ -239,6 +239,8 @@ de 7 días (no hay muestra suficiente para estimar).
 
 ### 6.1 Ventana de medición (`periodo`)
 
+> ⚠️ **Superado por [`docs/SPEC-frontend-contrato-v2-y-v3-2026-09.md`](SPEC-frontend-contrato-v2-y-v3-2026-09.md)** (contrato v2.0, 2026-09-28). El texto de abajo describe el contrato v1.0 y se conserva solo como historia.
+
 `negocio.periodo` y `negocio.costos.periodo` tienen la misma forma pero son
 anclas **independientes** — pueden estar en modos distintos al mismo tiempo
 (por ejemplo Turnos/Negocio en `desde_ancla` y Costos todavía en
@@ -259,6 +261,8 @@ opcionalmente `dias`).
 
 ### 6.2 Campos `_periodo`
 
+> ⚠️ **Superado por [`docs/SPEC-frontend-contrato-v2-y-v3-2026-09.md`](SPEC-frontend-contrato-v2-y-v3-2026-09.md)** (contrato v2.0, 2026-09-28). El texto de abajo describe el contrato v1.0 y se conserva solo como historia.
+
 Son aditivos — todo lo que ya se mostraba (`_total`, `_mes`) sigue
 funcionando igual. Se muestran en primer plano junto a los históricos para
 que el reset se note en pantalla:
@@ -277,6 +281,8 @@ que el reset se note en pantalla:
   venir `null` (mostrar "sin datos suficientes", nunca `0`).
 
 ### 6.3 Reset de la ventana (`POST /webhook/diagnostico`)
+
+> ⚠️ **Superado por [`docs/SPEC-frontend-contrato-v2-y-v3-2026-09.md`](SPEC-frontend-contrato-v2-y-v3-2026-09.md)** (contrato v2.0, 2026-09-28). El texto de abajo describe el contrato v1.0 y se conserva solo como historia.
 
 Mismo path que el GET, mismo token.
 
@@ -306,6 +312,8 @@ No hay auditoría/historial de resets en el backend — si se resetea por
 error, la única corrección es un nuevo POST con `desde_anterior` en `desde`.
 
 ### 6.4 Consulta ad-hoc por query params
+
+> ⚠️ **Superado por [`docs/SPEC-frontend-contrato-v2-y-v3-2026-09.md`](SPEC-frontend-contrato-v2-y-v3-2026-09.md)** (contrato v2.0, 2026-09-28). El texto de abajo describe el contrato v1.0 y se conserva solo como historia.
 
 ```
 GET /webhook/diagnostico?desde=YYYY-MM-DD&hasta=YYYY-MM-DD

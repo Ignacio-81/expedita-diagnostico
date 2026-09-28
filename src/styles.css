@@ -159,6 +159,13 @@ code {
   border-radius: 5px;
 }
 
+.contract-badge {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .topbar-right {
   display: flex;
   align-items: center;
@@ -249,6 +256,18 @@ code {
   background: var(--crit-bg);
   color: var(--crit-text);
   border: 1px solid var(--crit);
+  border-radius: 7px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+/* Aviso de versión de contrato no reconocida (tono advertencia) */
+.global-warn {
+  margin: 0.85rem 1.75rem 0;
+  padding: 0.7rem 1.1rem;
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  border: 1px solid var(--warn);
   border-radius: 7px;
   font-size: 0.9375rem;
   font-weight: 600;
@@ -388,6 +407,60 @@ code {
   color: var(--text-2);
 }
 
+.periodo-info + .periodo-sub {
+  margin-top: -0.8rem;
+}
+
+.periodo-sub {
+  margin: 0 0 1.1rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+/* Aviso tras un reset: fecha anterior (única pista para deshacerlo) */
+.reset-aviso {
+  margin: 0;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.reset-aviso-warn strong {
+  color: var(--warn-text);
+}
+
+/* error_detalle de un bloque/sub-bloque en error */
+.error-detalle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 7px;
+  overflow-wrap: anywhere;
+}
+
+.error-detalle svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.error-detalle-crit {
+  background: var(--crit-bg);
+  color: var(--crit-text);
+}
+
+.error-detalle-warn {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
 .tag-estimado {
   font-size: 0.75rem;
   font-weight: 700;
@@ -498,6 +571,16 @@ code {
   color: var(--text-2);
 }
 
+/* Cifra destacada de Costos (proyección per-message o medido) */
+.stats-destacadas {
+  align-items: end;
+}
+
+.stats-destacadas .stat:first-child .stat-value:not(.muted) {
+  font-size: 2.25rem;
+  color: var(--accent);
+}
+
 .stat-block + .stat-block {
   margin-top: 1.1rem;
 }
@@ -601,6 +684,10 @@ tbody tr:hover {
   color: var(--text-muted);
 }
 
+.fila-inexistente td {
+  color: var(--text-muted);
+}
+
 .tabla-simple {
   margin-top: 1rem;
   min-width: 0;
@@ -615,6 +702,17 @@ tbody tr:hover {
   border-top: 1px solid var(--border);
   font-size: 0.9375rem;
   color: var(--text-2);
+}
+
+.resumen-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.resumen-nota {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
 }
 
 .resumen-linea strong {
