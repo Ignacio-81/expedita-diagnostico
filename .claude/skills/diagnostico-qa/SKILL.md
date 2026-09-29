@@ -78,6 +78,16 @@ rama sin reset. El resto, con copias locales del mock (no commitear):
   en `staging`), DevTools → Network: **cada** botón emite su POST con el
   `ambito` correcto y después un GET. El agente no prueba contra `staging`.
 
+### 2.2 Casos del contrato 4.0
+
+Con `?mock=v4` y `?mock=v4-critico` (más los mocks 2.0, que deben seguir
+iguales): semáforo visible solo en 4.0 (`Todo OK` vs `Crítico: N advertencias,
+M críticos` con la lista); ningún umbral numérico de salud en `src/app.js`;
+`tasa_error_pct: null` → "sin ejecuciones"; `truncado` → "≥"; fila WF7;
+`contencion_pct: null` → "midiendo (N de 7 días)"; `elegibles_cerrados < 10` →
+"muestra chica"; tendencia con día parcial; `pacientes` con `status: error`
+no rompe el resto; consola sin errores.
+
 ## 3. Responsive básico
 
 Sin un sitio de 8 páginas no hace falta revisar consistencia entre

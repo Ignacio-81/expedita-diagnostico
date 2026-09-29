@@ -1,0 +1,366 @@
+{
+  "generated_at": "2026-09-28T10:15:00-03:00",
+  "environment": "staging",
+  "salud": {
+    "n8n": {
+      "status": "up",
+      "workflows": [
+        {
+          "nombre": "WF1_Bot_WhatsApp",
+          "activo": true,
+          "ejecuciones_ok_24h": 57,
+          "ejecuciones_error_24h": 1,
+          "tasa_error_pct": 1.7,
+          "ultimo_error_at": "2026-09-28T09:12:03-03:00",
+          "ultimo_error_mensaje": "Error en el nodo \"GET slots GCal\"",
+          "ejecuciones_colgadas": 0,
+          "error_workflow_configurado": true,
+          "truncado": false
+        },
+        {
+          "nombre": "WF2_Sync_Feriados",
+          "activo": true,
+          "ultima_corrida_ok_at": "2026-09-28T03:00:02-03:00",
+          "horas_desde_ultima_corrida": 7.3,
+          "ejecuciones_error_24h": 0,
+          "ejecuciones_colgadas": 0,
+          "error_workflow_configurado": true,
+          "truncado": false,
+          "ultima_corrida_at": "2026-09-28T03:00:02-03:00",
+          "ultima_corrida_status": "success"
+        },
+        {
+          "nombre": "WF3_Recordatorio_Turnos",
+          "activo": true,
+          "ultima_corrida_ok_at": "2026-09-28T08:00:04-03:00",
+          "horas_desde_ultima_corrida": 2.3,
+          "ejecuciones_error_24h": 0,
+          "ejecuciones_colgadas": 0,
+          "error_workflow_configurado": true,
+          "truncado": false,
+          "ultima_corrida_at": "2026-09-28T08:00:04-03:00",
+          "ultima_corrida_status": "success"
+        },
+        {
+          "nombre": "WF4_Sync_GCal_Appointments",
+          "activo": true,
+          "ultima_corrida_ok_at": "2026-09-28T10:00:01-03:00",
+          "horas_desde_ultima_corrida": 0.3,
+          "ejecuciones_error_24h": 0,
+          "ejecuciones_colgadas": 0,
+          "error_workflow_configurado": true,
+          "truncado": false,
+          "ultima_corrida_at": "2026-09-28T10:00:01-03:00",
+          "ultima_corrida_status": "success"
+        },
+        {
+          "nombre": "WF5_Diagnostico",
+          "activo": true,
+          "ejecuciones_ok_24h": 6,
+          "ejecuciones_error_24h": 0,
+          "tasa_error_pct": 0,
+          "ultimo_error_at": null,
+          "ultimo_error_mensaje": null,
+          "ejecuciones_colgadas": 0,
+          "error_workflow_configurado": true,
+          "truncado": false
+        },
+        {
+          "nombre": "WF6_Auto_Cancelacion",
+          "activo": true,
+          "ultima_corrida_ok_at": "2026-09-28T10:15:00-03:00",
+          "horas_desde_ultima_corrida": 0,
+          "ejecuciones_error_24h": 0,
+          "ejecuciones_colgadas": 0,
+          "error_workflow_configurado": true,
+          "truncado": false,
+          "ultima_corrida_at": "2026-09-28T10:15:00-03:00",
+          "ultima_corrida_status": "success"
+        },
+        {
+          "nombre": "WF7_Alertas",
+          "activo": true,
+          "ejecuciones_ok_24h": 3,
+          "ejecuciones_error_24h": 0,
+          "tasa_error_pct": 0,
+          "ultimo_error_at": null,
+          "ultimo_error_mensaje": null,
+          "ejecuciones_colgadas": 0,
+          "error_workflow_configurado": true,
+          "truncado": false
+        }
+      ],
+      "tasa_error_operativa_pct": 1.7,
+      "trafico_wf1": {
+        "mensajes_procesados_24h": 57,
+        "fuente": "ejecuciones exitosas de WF1 con mensaje de usuario",
+        "nota": "Excluye webhooks de estado de Meta.",
+        "duracion_p95_ms": 4200
+      }
+    },
+    "db": {
+      "status": "ok",
+      "latencia_ms": 480,
+      "espacio_usado_mb": 42.3,
+      "espacio_limite_mb": 500,
+      "turnos_huerfanos": 0,
+      "espacio_alcance": "proyecto_supabase",
+      "espacio_nota": "Tamaño del proyecto Supabase entero (todos los ambientes), no solo de este ambiente."
+    },
+    "meta": {
+      "status": "ok",
+      "quality_rating": "GREEN",
+      "webhooks_ok": true,
+      "phone_status": "CONNECTED",
+      "name_status": "APPROVED",
+      "messaging_limit": "TIER_250"
+    },
+    "infra": {
+      "tunnel_status": "up",
+      "redis_memoria_mb": 1.4,
+      "redis_maxmemory_mb": 256,
+      "redis_maxmemory_configurado": true,
+      "redis_keys": 312
+    },
+    "llm": {
+      "errores_24h": 0,
+      "rate_limit_24h": 2,
+      "ventana_cubierta_horas": 24,
+      "techo_tpm": 6000,
+      "proxy_sin_instrumentacion": 0
+    }
+  },
+  "negocio": {
+    "reset_desde": "2026-09-18T12:00:00-03:00",
+    "turnos": {
+      "creados_total": 24,
+      "creados_mes": 24,
+      "cancelados_bot": 2,
+      "cancelados_gcal_manual": 1,
+      "por_tipo": [
+        {
+          "especialidad": "Consulta/Limpieza",
+          "cantidad": 15
+        },
+        {
+          "especialidad": "Ortodoncia",
+          "cantidad": 9
+        }
+      ],
+      "cohorte_definicion": "turnos que hoy están en estado Cancelled, contados según su fecha de creación (la base no tiene fecha de cancelación) — desde 'reset_desde' si hay un reset activo, o sin límite si no lo hay",
+      "cancelados_bot_recordatorio": 1,
+      "cancelados_auto_sin_confirmacion": 2,
+      "cancelados_sin_origen": 0,
+      "cancelados_total": 6,
+      "tasa_cancelacion_total_pct": 25.0
+    },
+    "recordatorios": {
+      "wf3_corrida_hoy": "ok",
+      "hoy": {
+        "enviados": 4,
+        "entregados": 4,
+        "sin_entrega_confirmada": 0
+      },
+      "proximos_dias": [
+        {
+          "fecha": "2026-09-29",
+          "vigentes": 4,
+          "con_recordatorio": 4,
+          "recordatorio_entregado": 4,
+          "confirmados": 2,
+          "vigentes_sin_recordatorio": 0,
+          "vigentes_sin_recordatorio_previos": 0,
+          "cancelados_auto": 0,
+          "cancelados_paciente": 0,
+          "cancelados_recepcion": 0
+        },
+        {
+          "fecha": "2026-09-30",
+          "vigentes": 3,
+          "con_recordatorio": 0,
+          "recordatorio_entregado": 0,
+          "confirmados": 0,
+          "vigentes_sin_recordatorio": 3,
+          "vigentes_sin_recordatorio_previos": 0,
+          "cancelados_auto": 0,
+          "cancelados_paciente": 1,
+          "cancelados_recepcion": 0
+        },
+        {
+          "fecha": "2026-10-01",
+          "vigentes": 2,
+          "con_recordatorio": 0,
+          "recordatorio_entregado": 0,
+          "confirmados": 0,
+          "vigentes_sin_recordatorio": 2,
+          "vigentes_sin_recordatorio_previos": 0,
+          "cancelados_auto": 0,
+          "cancelados_paciente": 0,
+          "cancelados_recepcion": 0
+        },
+        {
+          "fecha": "2026-10-02",
+          "vigentes": 1,
+          "con_recordatorio": 0,
+          "recordatorio_entregado": 0,
+          "confirmados": 0,
+          "vigentes_sin_recordatorio": 1,
+          "vigentes_sin_recordatorio_previos": 0,
+          "cancelados_auto": 0,
+          "cancelados_paciente": 0,
+          "cancelados_recepcion": 0
+        }
+      ],
+      "definicion": "Turnos vigentes de los próximos 4 días (mañana … mañana+3) y el estado de su recordatorio."
+    },
+    "pacientes": {
+      "altas_total": 11,
+      "altas_mes": 11
+    },
+    "costos": {
+      "reset_desde": null,
+      "meta_estimado_ars": 22608,
+      "meta_medido_ars": 1507,
+      "meta_proyectado_per_message_ars": 6782,
+      "meta_medido_proyeccion_mes_ars": 1615,
+      "pricing_per_message_vigente": false,
+      "medicion_desde": "2026-09-01T09:14:22.000-03:00",
+      "medicion_dias": 28,
+      "medicion_mes_completo": true,
+      "mensajes_medidos": 180,
+      "mensajes_por_categoria": {
+        "service": 140,
+        "utility": 40,
+        "marketing": 0,
+        "authentication": 0
+      },
+      "groq_estimado_usd": 0.46,
+      "nota": "meta_medido_ars: costo REAL de los mensajes capturados por categoría de pricing desde medicion_desde (ventana que puede ser parcial: ver medicion_dias / medicion_mes_completo). meta_estimado_ars y groq_estimado_usd: proyección a 30 días a partir de turnos/día (requieren ≥7 días de datos desde el último reset; si no, quedan en null). Los tokens de Groq no se miden todavía — ese número siempre es estimado."
+    },
+    "confirmacion": {
+      "recordatorios_enviados": 20,
+      "sin_botones": 1,
+      "en_curso": 3,
+      "elegibles_cerrados": 14,
+      "no_entregados": 1,
+      "confirmados": 9,
+      "auto_cancelados": 2,
+      "cancelados_paciente": 1,
+      "cancelados_recepcion": 1,
+      "sin_resolucion": 1,
+      "tasa_confirmacion_pct": 64.3,
+      "tasa_auto_cancelacion_pct": 14.3,
+      "tasa_cancelacion_paciente_pct": 7.1,
+      "definicion": "Embudo de los recordatorios con botones ya cerrados (turno pasado o resuelto); confirmación = paciente o recepción."
+    },
+    "auto_cancelacion": {
+      "corte_hoy_at": "2026-09-29T09:00:00-03:00",
+      "pendientes_de_decision": 0,
+      "auto_cancelados_hoy": 1,
+      "definicion": "Turnos de mañana sin confirmar al corte de hoy."
+    },
+    "derivaciones": {
+      "total": 9,
+      "por_motivo": {
+        "explicito_menu": 3,
+        "explicito_texto": 2,
+        "explicito_ia": 1,
+        "urgencia": 1,
+        "fallback_flujo": 1,
+        "fallback_ia": 1,
+        "error_sistema": 0
+      },
+      "ultimas_24h": {
+        "total": 2,
+        "error_sistema": 0,
+        "fallback_ia": 1,
+        "fallback_flujo": 0,
+        "urgencia": 1
+      },
+      "en_modo_humano_ahora": 1,
+      "contencion_7d": {
+        "conversaciones": 40,
+        "derivadas": 6,
+        "contencion_pct": 85.0,
+        "dias_cubiertos": 7
+      }
+    },
+    "tendencia_7d": [
+      {
+        "fecha": "2026-09-23",
+        "parcial": false,
+        "turnos_creados": 2,
+        "recordatorios_enviados": 2,
+        "confirmaciones": 1,
+        "auto_cancelados": 0,
+        "derivaciones": 1,
+        "mensajes_facturables": 20
+      },
+      {
+        "fecha": "2026-09-24",
+        "parcial": false,
+        "turnos_creados": 3,
+        "recordatorios_enviados": 3,
+        "confirmaciones": 2,
+        "auto_cancelados": 0,
+        "derivaciones": 0,
+        "mensajes_facturables": 31
+      },
+      {
+        "fecha": "2026-09-25",
+        "parcial": false,
+        "turnos_creados": 1,
+        "recordatorios_enviados": 2,
+        "confirmaciones": 1,
+        "auto_cancelados": 1,
+        "derivaciones": 2,
+        "mensajes_facturables": 18
+      },
+      {
+        "fecha": "2026-09-26",
+        "parcial": false,
+        "turnos_creados": 4,
+        "recordatorios_enviados": 4,
+        "confirmaciones": 3,
+        "auto_cancelados": 0,
+        "derivaciones": 1,
+        "mensajes_facturables": 40
+      },
+      {
+        "fecha": "2026-09-27",
+        "parcial": false,
+        "turnos_creados": 3,
+        "recordatorios_enviados": 3,
+        "confirmaciones": 2,
+        "auto_cancelados": 1,
+        "derivaciones": 3,
+        "mensajes_facturables": 33
+      },
+      {
+        "fecha": "2026-09-28",
+        "parcial": false,
+        "turnos_creados": 2,
+        "recordatorios_enviados": 2,
+        "confirmaciones": 1,
+        "auto_cancelados": 0,
+        "derivaciones": 1,
+        "mensajes_facturables": 25
+      },
+      {
+        "fecha": "2026-09-29",
+        "parcial": true,
+        "turnos_creados": 1,
+        "recordatorios_enviados": 1,
+        "confirmaciones": 0,
+        "auto_cancelados": 0,
+        "derivaciones": 1,
+        "mensajes_facturables": 9
+      }
+    ]
+  },
+  "contract_version": "4.0",
+  "resumen": {
+    "estado": "ok",
+    "alertas": []
+  }
+}

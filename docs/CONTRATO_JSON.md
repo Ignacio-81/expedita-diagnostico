@@ -193,3 +193,64 @@ Nunca una URL arbitraria por query param. Token guardado por ambiente en
 `sessionStorage` (`diagToken:staging` / `diagToken:test`).
 
 Ver también `.claude/skills/diagnostico-contract/SKILL.md`.
+
+---
+
+# Contrato 4.0 (delta respecto de 2.0)
+
+Fuente: backend `dental-clinic-bot`, `docs/Especificaciones_de_la_aplicacion.md`
+§7.4; UI en `SPEC-frontend-contrato-v2-y-v3-2026-09.md` §4.1-§4.4. El panel
+entiende `2.0`, `3.0`-`3.2` y `4.0` (`CONTRATOS_SOPORTADOS` en `src/app.js`);
+todo campo nuevo se lee con guarda y un bloque que la versión de la respuesta
+todavía no publica se oculta (si la versión ya lo exige y falta: "sin datos").
+Mocks: `mock-response-v4.json` (todo sano) y `mock-response-v4-critico.json`
+(alertas, nulos, bloque en error).
+
+**Quitados** (no se leen): `salud.n8n.tasa_error_global_pct`,
+`salud.n8n.duracion_promedio_wf1_ms`, `salud.meta.token_dias_restantes`,
+`negocio.turnos.tasa_cancelacion_pct`,
+`negocio.recordatorios.{confirmados_manana,recordatorios_enviados,tasa_exito_pct}`,
+`negocio.validacion_telefono`.
+
+**Cambia:** `workflows[].tasa_error_pct` es `null` (no `0`) sin ejecuciones en
+24h → "sin ejecuciones".
+
+**Agregados**
+- Raíz: `contract_version`, `resumen {estado: ok|advertencia|critico|sin_datos,
+  alertas[{codigo, severidad, bloque, campo, mensaje, valor, umbral}]}`.
+  **Los umbrales viven en el backend**: el front no tiene ninguno; el color de
+  una métrica y el pill de cada bloque salen solo de `resumen.alertas[]`.
+- `salud.llm {errores_24h, rate_limit_24h, ventana_cubierta_horas, techo_tpm,
+  proxy_sin_instrumentacion}`.
+- `salud.n8n`: `tasa_error_operativa_pct`, `trafico_wf1 {mensajes_procesados_24h,
+  fuente, nota, duracion_p95_ms}`; `workflows[]`: `error_workflow_configurado`,
+  `truncado`, cron también `ultima_corrida_at`/`ultima_corrida_status`; fila
+  `WF7_Alertas`.
+- `salud.meta`: `phone_status`, `name_status`, `messaging_limit`.
+- `salud.db`: `espacio_alcance`, `espacio_nota`.
+- `salud.infra`: `redis_maxmemory_mb`, `redis_maxmemory_configurado`, `redis_keys`.
+- `negocio.turnos`: `cancelados_bot_recordatorio`, `cancelados_auto_sin_confirmacion`,
+  `cancelados_sin_origen`, `cancelados_total`, `tasa_cancelacion_total_pct`,
+  `origenes_desconocidos` (opcional).
+- `negocio.recordatorios`: `wf3_corrida_hoy`, `proximos_dias[4]`, `hoy`, `definicion`.
+- `negocio.confirmacion`, `negocio.auto_cancelacion`, `negocio.derivaciones`
+  (embudo, WF6, derivaciones a humano).
+- `negocio.tendencia_7d[7]` (+ `tendencia_status: "error"` si falla).
+
+**Validado contra un payload real de `test-mock` (2026-09-29):**
+- `alertas[].bloque` es el path con notación de punto hasta el bloque
+  (`"salud.n8n"`, `"negocio.derivaciones"`, nunca el nombre bare) y `.campo` es
+  el path completo hasta la hoja, con el nombre del workflow **entre corchetes
+  sin comillas** cuando aplica (`"salud.n8n.workflows[WF2_Sync_Feriados].horas_desde_ultima_corrida"`).
+  El matching por subcadena en minúsculas de `toneAlertas()` funciona bien
+  contra esta forma real (confirmado). `valor` viene con el tipo nativo del
+  dato (number/boolean), nunca forzado a string.
+- `negocio.tendencia_status` **no existe cuando la tendencia está sana** —
+  solo se agrega (`"error"`) si la query de 7 días falla. El front ya lo trata
+  bien (`negocio.tendencia_status === "error"` da `false` con el campo
+  ausente, sin romper nada).
+- `salud.llm.proxy_sin_instrumentacion` es un **número** (conteo, copia de
+  `negocio.derivaciones.ultimas_24h.error_sistema`), **nunca un booleano**.
+  ⚠️ Esto rompía la nota original (`=== true` nunca daba verdadero) — corregido
+  el 2026-09-29 para mostrarlo como estadística + nota explicativa. Mocks
+  actualizados a la forma numérica real.

@@ -6,17 +6,19 @@ description: >
   src/app.js, src/index.html, o cualquier lógica de parseo/render del panel.
 ---
 
-# Contrato JSON del panel de diagnóstico (v2.0)
+# Contrato JSON del panel de diagnóstico (v2.0 y v4.0)
 
 El backend (WF5, en `dental-clinic-bot`) expone un único endpoint: GET para
 el snapshot y POST para el reset. Referencia completa (diccionario de campos
 con tipos y semántica de `null`) en
 [docs/CONTRATO_JSON.md](../../../docs/CONTRATO_JSON.md) — mantener ambos
-sincronizados si el contrato cambia. Las fases siguientes (contratos 3.0 →
-4.0) están en
+sincronizados si el contrato cambia. Las fases 2-5 (contratos 3.0 → 4.0) están en
 [docs/SPEC-frontend-contrato-v2-y-v3-2026-09.md](../../../docs/SPEC-frontend-contrato-v2-y-v3-2026-09.md)
-§4: **no implementarlas** hasta que Ignacio avise que el backend de esa
-versión está listo.
+§4 y **ya están implementadas** (Ignacio las pidió el 2026-09-29). El delta
+4.0 está al final de `docs/CONTRATO_JSON.md`. Reglas nuevas: el front **no
+tiene umbrales de salud hardcodeados** (color/pill salen de
+`resumen.alertas[]`); un bloque que la versión de la respuesta aún no publica
+se oculta, y si la versión ya lo exige y falta → "sin datos".
 
 ## Endpoint
 
@@ -37,7 +39,7 @@ POST /webhook/diagnostico          {"accion":"reset","ambito":"negocio"|"costos"
 ## Versión de contrato
 
 - `contract_version` en la raíz; **ausente → `"2.0"`**.
-- `CONTRATOS_SOPORTADOS` en `src/app.js` (hoy `["2.0"]`).
+- `CONTRATOS_SOPORTADOS` en `src/app.js` (hoy `["2.0","3.0","3.1","3.2","4.0"]`).
 - MAYOR desconocido → banner de advertencia (`#contract-warning`) y se
   renderiza igual lo que se pueda. Mismo MAYOR, MENOR desconocido → sin
   banner.

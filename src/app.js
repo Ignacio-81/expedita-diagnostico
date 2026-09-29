@@ -20,6 +20,8 @@ const WEBHOOK_URL = BACKENDS[AMBIENTE];
 const MOCKS = {
   "con-reset": "../docs/mock-response.json",
   "sin-reset": "../docs/mock-response-sin-reset.json",
+  v4: "../docs/mock-response-v4.json",
+  "v4-critico": "../docs/mock-response-v4-critico.json",
 };
 const MOCK_URL = MOCKS[PARAMS.get("mock")] || MOCKS["con-reset"];
 
@@ -36,13 +38,14 @@ const TOKEN_STORAGE_KEY = `diagToken:${AMBIENTE}`;
 const THEME_STORAGE_KEY = "diagTheme";
 
 // Versiones de contrato que este panel entiende. Sin `contract_version` en la
-// respuesta => "2.0" (el backend v2.0 no publica el campo).
-const CONTRATOS_SOPORTADOS = ["2.0"];
+// respuesta => "2.0" (el backend v2.0 no publica el campo). El backend salta de
+// 2.0 a 4.0 en staging; 3.x (fases 2-4 de la spec) también se entiende por si
+// se despliega una versión intermedia.
+const CONTRATOS_SOPORTADOS = ["2.0", "3.0", "3.1", "3.2", "4.0"];
 const CONTRATO_DEFAULT = "2.0";
 
-// Umbral de tasa de error por workflow. Hardcodeado hasta el contrato v4.0,
-// donde lo define el backend en `resumen.alertas[]`.
-const UMBRAL_TASA_ERROR_PCT = 5;
+// Sin umbrales de salud en el front: los define el backend (Config) y llegan
+// en `resumen.alertas[]` (contrato 4.0). Ver `toneAlertas()`.
 
 // Workflows programados (cron): no traen ejecuciones_ok_24h ni tasa_error_pct.
 const WORKFLOWS_CRON = new Set([
@@ -58,6 +61,12 @@ const CATEGORIAS_MENSAJE = ["service", "utility", "marketing", "authentication"]
 // Última respuesta completa del webhook — se usa para repintar el encabezado
 // de un panel si el GET posterior a un reset falla (ver resetearMedicion).
 let ultimoData = null;
+
+// Alertas del semáforo global (resumen.alertas[]) y versión del contrato de la
+// última respuesta renderizada. Los render de bloque las consultan para
+// resaltar campos y elevar el pill; se reasignan en render().
+let ALERTAS = [];
+let VERSION_ACTUAL = [2, 0];
 
 // ---------------------------------------------------------------------------
 // Helpers de formato — regla central: null/undefined => "sin datos", nunca 0.
@@ -132,6 +141,63 @@ function fmtUltimaCorrida(at, horas) {
 
 function plural(n, singular, pluralTxt) {
   return `${n} ${n === 1 ? singular : pluralTxt}`;
+}
+
+// "3.2" => [3, 2]. Un valor ilegible cae a [0, 0].
+function parseVersion(v) {
+  const [maj, min] = String(v).split(".");
+  return [parseInt(maj, 10) || 0, parseInt(min, 10) || 0];
+}
+
+// ¿El contrato de la respuesta actual ya debería traer un bloque introducido
+// en `minVersion`? Si sí y falta => "sin datos"; si no => se oculta (es normal
+// que un backend 2.0 no lo publique).
+function versionAlcanza(minVersion) {
+  const [a, b] = VERSION_ACTUAL;
+  const [c, d] = parseVersion(minVersion);
+  return a > c || (a === c && b >= d);
+}
+
+// Día "YYYY-MM-DD" => "dd/mm" sin pasar por Date (evita el corrimiento UTC).
+function fmtDia(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  if (m) return `${m[3]}/${m[2]}`;
+  return fmtFechaCorta(iso);
+}
+
+// --- Semáforo: resumen.alertas[] es la ÚNICA fuente de color/umbral.
+const TONE_RANK = { unk: 0, good: 1, warn: 2, crit: 3 };
+
+function peorTono(a, b) {
+  return (TONE_RANK[b] || 0) > (TONE_RANK[a] || 0) ? b : a;
+}
+
+function severidadATono(sev) {
+  const s = String(sev || "").toLowerCase();
+  if (s === "critico" || s === "crítico") return "crit";
+  if (s === "advertencia") return "warn";
+  return "warn";
+}
+
+// Peor tono entre las alertas del bloque (y, si se pasa, del campo) — o
+// undefined si no hay ninguna. `mencion` restringe a alertas que nombran ese
+// texto (p. ej. un workflow). Comparación laxa: el backend puede anidar
+// bloque/campo ("salud.n8n", "workflows.WF1.tasa_error_pct").
+function toneAlertas(bloque, campo, mencion) {
+  let tone;
+  for (const a of ALERTAS) {
+    if (!esObjeto(a)) continue;
+    if (!String(a.bloque || "").toLowerCase().includes(bloque)) continue;
+    if (campo && !String(a.campo || "").toLowerCase().includes(campo)) continue;
+    if (mencion && !JSON.stringify(a).toLowerCase().includes(mencion.toLowerCase())) continue;
+    tone = peorTono(tone || "unk", severidadATono(a.severidad));
+  }
+  return tone;
+}
+
+// Clase de celda según alertas ("cell-warn"/"cell-crit"/"").
+function claseCelda(tone) {
+  return tone === "crit" ? "cell-crit" : tone === "warn" ? "cell-warn" : "";
 }
 
 // Encabezado de un ancla de medición (negocio.reset_desde o
@@ -335,14 +401,19 @@ function qualityRatingTone(rating) {
 // ---------------------------------------------------------------------------
 
 // pillFn(block) => { tone, label? }; por defecto se deriva de block.status.
-function renderBloqueSalud(bodyEl, pillEl, block, renderFn, pillFn) {
+function renderBloqueSalud(bodyEl, pillEl, block, renderFn, pillFn, bloque) {
+  const alertaBloque = bloque ? toneAlertas(bloque) : undefined;
   if (!esObjeto(block)) {
-    setPill(pillEl, "unk");
+    setPill(pillEl, alertaBloque || "unk");
     renderSinDatos(bodyEl, "sin datos");
     return;
   }
   try {
-    const pill = pillFn ? pillFn(block) : { tone: statusToTone(block.status) };
+    let pill = pillFn ? pillFn(block) : { tone: statusToTone(block.status) };
+    // Una alerta del backend sobre este bloque eleva el pill (nunca lo baja).
+    if (alertaBloque && peorTono(pill.tone, alertaBloque) !== pill.tone) {
+      pill = { tone: alertaBloque };
+    }
     setPill(pillEl, pill.tone, pill.label);
     clear(bodyEl);
     // El detalle toma el tono del pill (p. ej. túnel "degradado" => advertencia).
@@ -362,6 +433,38 @@ function esWorkflowCron(wf) {
   return !("ejecuciones_ok_24h" in wf) && "ultima_corrida_ok_at" in wf;
 }
 
+// Conteo con "≥" cuando la fila viene truncada (contrato 3.2+: son mínimos).
+function fmtConteo(v, truncado) {
+  if (!esDato(v)) return "sin datos";
+  return truncado === true ? `≥ ${v}` : String(v);
+}
+
+// Tasa de error de una fila no-cron. `null` (contrato 4.0) = no hubo
+// ejecuciones en 24h; ausente = sin datos.
+function fmtTasaFila(wf) {
+  if (wf.tasa_error_pct === null) return "sin ejecuciones";
+  return fmtPct(wf.tasa_error_pct);
+}
+
+function celdaUltimaCorrida(wf) {
+  const td = el("td");
+  const at = esDato(wf.ultima_corrida_at) ? wf.ultima_corrida_at : wf.ultima_corrida_ok_at;
+  if (!esDato(at) && !esDato(wf.ultima_corrida_status)) {
+    td.textContent = "sin datos";
+    return td;
+  }
+  let txt = fmtUltimaCorrida(at, wf.horas_desde_ultima_corrida);
+  if (esDato(wf.ultima_corrida_status)) {
+    const st = String(wf.ultima_corrida_status);
+    txt = `${st} · ${txt}`;
+    const ok = st.toLowerCase() === "success";
+    const running = st.toLowerCase() === "running";
+    if (!ok && !running) td.className = "cell-warn";
+  }
+  td.textContent = txt;
+  return td;
+}
+
 function renderN8n(body, pill, block) {
   renderBloqueSalud(body, pill, block, (b) => {
     const tableWrap = el("div", { className: "table-wrap" });
@@ -375,7 +478,7 @@ function renderN8n(body, pill, block) {
       "Error 24h",
       "Tasa error",
       "Colgadas",
-      "Última corrida OK",
+      "Última corrida",
       "Último error",
     ].forEach((h) => headRow.appendChild(el("th", { text: h })));
     thead.appendChild(headRow);
@@ -383,12 +486,25 @@ function renderN8n(body, pill, block) {
 
     const tbody = el("tbody");
     const workflows = Array.isArray(b.workflows) ? b.workflows : [];
+    const hayResumen = ALERTAS.length > 0;
     for (const wfCrudo of workflows) {
       const wf = esObjeto(wfCrudo) ? wfCrudo : {};
       const cron = esWorkflowCron(wf);
       const noExiste = wf.activo === null;
+      const nombre = esDato(wf.nombre) ? String(wf.nombre) : "";
       const tr = el("tr", { className: noExiste ? "fila-inexistente" : "" });
-      tr.appendChild(el("td", { text: fmt(wf.nombre) }));
+
+      const nombreCell = el("td", { text: fmt(wf.nombre) });
+      // Workflow sin error-workflow: si falla, nadie se entera.
+      if (wf.error_workflow_configurado === false) {
+        nombreCell.appendChild(
+          el("span", {
+            className: "tag-alerta",
+            text: "sin error workflow",
+          })
+        );
+      }
+      tr.appendChild(nombreCell);
 
       const activoCell = el("td");
       if (noExiste) {
@@ -403,37 +519,39 @@ function renderN8n(body, pill, block) {
       }
       tr.appendChild(activoCell);
 
-      tr.appendChild(el("td", { text: cron ? "—" : fmt(wf.ejecuciones_ok_24h) }));
-      tr.appendChild(el("td", { text: fmt(wf.ejecuciones_error_24h) }));
+      tr.appendChild(
+        el("td", { text: cron ? "—" : fmtConteo(wf.ejecuciones_ok_24h, wf.truncado) })
+      );
+      tr.appendChild(el("td", { text: fmtConteo(wf.ejecuciones_error_24h, wf.truncado) }));
 
       if (cron) {
         tr.appendChild(el("td", { text: "—" }));
       } else {
-        const tasaWarn =
-          esDato(wf.tasa_error_pct) && wf.tasa_error_pct > UMBRAL_TASA_ERROR_PCT;
         tr.appendChild(
           el("td", {
-            className: tasaWarn ? "cell-warn" : "",
-            text: fmtPct(wf.tasa_error_pct),
+            className: claseCelda(nombre ? toneAlertas("n8n", "tasa_error", nombre) : undefined),
+            text: fmtTasaFila(wf),
           })
         );
       }
 
-      const colgadasWarn = esDato(wf.ejecuciones_colgadas) && wf.ejecuciones_colgadas > 0;
+      // Colgadas > 0 es un conteo, no un umbral: con semáforo (4.0) manda el
+      // backend; sin él (2.0/3.x) se mantiene el resaltado estructural.
+      const colgadasTone = hayResumen
+        ? nombre
+          ? toneAlertas("n8n", "colgada", nombre)
+          : undefined
+        : esDato(wf.ejecuciones_colgadas) && wf.ejecuciones_colgadas > 0
+          ? "warn"
+          : undefined;
       tr.appendChild(
         el("td", {
-          className: colgadasWarn ? "cell-warn" : "",
-          text: fmt(wf.ejecuciones_colgadas),
+          className: claseCelda(colgadasTone),
+          text: fmtConteo(wf.ejecuciones_colgadas, wf.truncado),
         })
       );
 
-      tr.appendChild(
-        el("td", {
-          text: cron
-            ? fmtUltimaCorrida(wf.ultima_corrida_ok_at, wf.horas_desde_ultima_corrida)
-            : "—",
-        })
-      );
+      tr.appendChild(cron ? celdaUltimaCorrida(wf) : el("td", { text: "—" }));
 
       let errorTexto = "—";
       if (esDato(wf.ultimo_error_mensaje)) {
@@ -448,44 +566,81 @@ function renderN8n(body, pill, block) {
     table.appendChild(tbody);
     tableWrap.appendChild(table);
     body.appendChild(tableWrap);
+    if (workflows.some((w) => esObjeto(w) && w.truncado === true)) {
+      body.appendChild(
+        el("p", {
+          className: "nota",
+          text: "“≥” = conteo truncado: el valor real es igual o mayor.",
+        })
+      );
+    }
 
     const resumen = el("div", { className: "resumen-linea" });
+    const agregarResumen = (etiqueta, valor, nota, tone) => {
+      const item = el("div", { className: "resumen-item" });
+      const linea = el("span");
+      linea.appendChild(document.createTextNode(`${etiqueta}: `));
+      linea.appendChild(
+        el("strong", { className: claseCelda(tone), text: valor })
+      );
+      item.appendChild(linea);
+      if (nota) item.appendChild(el("span", { className: "resumen-nota", text: nota }));
+      resumen.appendChild(item);
+    };
 
-    const r1 = el("div", { className: "resumen-item" });
-    const r1Valor = el("span");
-    r1Valor.appendChild(document.createTextNode("Tasa de error global: "));
-    r1Valor.appendChild(el("strong", { text: fmtPct(b.tasa_error_global_pct) }));
-    r1.appendChild(r1Valor);
-    r1.appendChild(
-      el("span", {
-        className: "resumen-nota",
-        text: "Incluye las ejecuciones del propio panel y de WF6; para el bot, ver la fila de WF1.",
-      })
-    );
-    resumen.appendChild(r1);
+    // 4.0: tasa operativa (excluye panel y alertas). 2.0/3.x: la global.
+    if ("tasa_error_operativa_pct" in b) {
+      agregarResumen(
+        "Tasa de error operativa",
+        fmtPct(b.tasa_error_operativa_pct),
+        "Excluye las ejecuciones del propio panel y de las alertas.",
+        toneAlertas("n8n", "tasa_error_operativa")
+      );
+    } else if ("tasa_error_global_pct" in b) {
+      agregarResumen(
+        "Tasa de error global",
+        fmtPct(b.tasa_error_global_pct),
+        "Incluye las ejecuciones del propio panel y de WF6; para el bot, ver la fila de WF1.",
+        toneAlertas("n8n", "tasa_error_global")
+      );
+    }
 
-    const r2 = el("div", { className: "resumen-item" });
-    const r2Valor = el("span");
-    r2Valor.appendChild(document.createTextNode("Duración promedio WF1: "));
-    r2Valor.appendChild(el("strong", { text: fmt(b.duracion_promedio_wf1_ms, " ms") }));
-    r2.appendChild(r2Valor);
-    r2.appendChild(
-      el("span", { className: "resumen-nota", text: "Incluye webhooks de estado de Meta." })
-    );
-    resumen.appendChild(r2);
+    const t = b.trafico_wf1;
+    if (esObjeto(t)) {
+      agregarResumen(
+        "Tráfico real WF1 (24 h)",
+        fmt(t.mensajes_procesados_24h, " mensajes"),
+        [t.fuente, t.nota].filter(esDato).join(" — ") || null
+      );
+      agregarResumen("Duración p95 WF1", fmt(t.duracion_p95_ms, " ms"), null);
+    } else if ("duracion_promedio_wf1_ms" in b) {
+      agregarResumen(
+        "Duración promedio WF1",
+        fmt(b.duracion_promedio_wf1_ms, " ms"),
+        "Incluye webhooks de estado de Meta."
+      );
+    }
 
-    body.appendChild(resumen);
-  });
+    if (resumen.childNodes.length > 0) body.appendChild(resumen);
+  }, undefined, "n8n");
 }
 
 function renderDb(body, pill, block) {
   renderBloqueSalud(body, pill, block, (b) => {
     renderStats(body, [
-      { label: "Latencia", value: fmt(b.latencia_ms, " ms") },
+      {
+        label: "Latencia",
+        value: fmt(b.latencia_ms, " ms"),
+        tone: toneAlertas("db", "latencia"),
+      },
       {
         label: "Turnos huérfanos",
         value: fmt(b.turnos_huerfanos),
-        tone: esDato(b.turnos_huerfanos) && b.turnos_huerfanos > 0 ? "warn" : undefined,
+        tone:
+          toneAlertas("db", "huerfano") ||
+          (ALERTAS.length === 0 && esDato(b.turnos_huerfanos) && b.turnos_huerfanos > 0
+            ? "warn"
+            : undefined),
       },
     ]);
 
@@ -503,19 +658,41 @@ function renderDb(body, pill, block) {
         })
       );
       const track = el("div", { className: "meter-track" });
-      const fill = el("div", { className: "meter-fill" });
+      const fill = el("div", {
+        className: `meter-fill${toneAlertas("db", "espacio") ? ` meter-${toneAlertas("db", "espacio")}` : ""}`,
+      });
       fill.style.width = `${pct}%`;
       track.appendChild(fill);
       block2.appendChild(track);
     } else {
       block2.appendChild(el("span", { className: "stat-value muted", text: "sin datos" }));
     }
+    if (esDato(b.espacio_nota)) {
+      block2.appendChild(el("span", { className: "stat-sub", text: String(b.espacio_nota) }));
+    }
     body.appendChild(block2);
-  });
+  }, undefined, "db");
+}
+
+// phone_status / name_status (3.1+): CONNECTED => OK, cualquier otro => ERROR.
+function statCadena(label, valor, okSi) {
+  const stat = el("div", { className: "stat" });
+  stat.appendChild(el("span", { className: "stat-label", text: label }));
+  const v = el("span", { className: "stat-value small" });
+  if (esDato(valor)) {
+    const ok = String(valor).toUpperCase() === okSi;
+    v.appendChild(el("span", { className: `dot ${ok ? "dot-good" : "dot-crit"}` }));
+    v.appendChild(document.createTextNode(String(valor)));
+  } else {
+    v.classList.add("muted");
+    v.textContent = "sin datos";
+  }
+  stat.appendChild(v);
+  return stat;
 }
 
 function renderMeta(body, pill, block) {
-  // token_dias_restantes es null siempre por diseño: no se muestra.
+  // token_dias_restantes fue quitado en 4.0 (null siempre en 2.0): no se lee.
   renderBloqueSalud(body, pill, block, (b) => {
     const quality = qualityRatingTone(b.quality_rating);
     const statsWrap = el("div", { className: "stats" });
@@ -544,8 +721,23 @@ function renderMeta(body, pill, block) {
     webhooksStat.appendChild(webhooksValue);
     statsWrap.appendChild(webhooksStat);
 
+    // Campos 3.1+: solo si el backend los publica.
+    if ("phone_status" in b) statsWrap.appendChild(statCadena("Número", b.phone_status, "CONNECTED"));
+    if ("name_status" in b) statsWrap.appendChild(statCadena("Nombre", b.name_status, "APPROVED"));
+    if ("messaging_limit" in b) {
+      const limStat = el("div", { className: "stat" });
+      limStat.appendChild(el("span", { className: "stat-label", text: "Límite de mensajería" }));
+      limStat.appendChild(
+        el("span", {
+          className: esDato(b.messaging_limit) ? "stat-value small" : "stat-value small muted",
+          text: fmt(b.messaging_limit),
+        })
+      );
+      statsWrap.appendChild(limStat);
+    }
+
     body.appendChild(statsWrap);
-  });
+  }, undefined, "meta");
 }
 
 // El bloque infra NO trae `status` cuando está sano: el pill se deriva de
@@ -590,28 +782,459 @@ function renderInfra(body, pill, block) {
       }
       statsWrap.appendChild(tunnelStat);
 
+      // Redis: con maxmemory (4.0) "X MB de Y MB"; sin límite configurado lo
+      // dice; contrato viejo => solo la memoria usada.
       const redisStat = el("div", { className: "stat" });
       redisStat.appendChild(el("span", { className: "stat-label", text: "Redis — memoria usada" }));
+      let redisTxt = fmt(b.redis_memoria_mb, " MB");
+      let redisSub = null;
+      if (esDato(b.redis_memoria_mb)) {
+        if (esDato(b.redis_maxmemory_mb) && Number(b.redis_maxmemory_mb) > 0) {
+          redisTxt = `${b.redis_memoria_mb} MB de ${b.redis_maxmemory_mb} MB`;
+        } else if (b.redis_maxmemory_configurado === false) {
+          redisSub = "sin límite configurado";
+        }
+      }
       redisStat.appendChild(
         el("span", {
           className: esDato(b.redis_memoria_mb) ? "stat-value" : "stat-value muted",
-          text: fmt(b.redis_memoria_mb, " MB"),
+          text: redisTxt,
         })
       );
+      if (redisSub) redisStat.appendChild(el("span", { className: "stat-sub", text: redisSub }));
       statsWrap.appendChild(redisStat);
+
+      if ("redis_keys" in b) {
+        const keysStat = el("div", { className: "stat" });
+        keysStat.appendChild(el("span", { className: "stat-label", text: "Redis — claves" }));
+        keysStat.appendChild(
+          el("span", {
+            className: esDato(b.redis_keys) ? "stat-value" : "stat-value muted",
+            text: fmt(b.redis_keys),
+          })
+        );
+        statsWrap.appendChild(keysStat);
+      }
 
       body.appendChild(statsWrap);
     },
-    infraPill
+    infraPill,
+    "infra"
   );
 }
 
-// Sub-bloque de negocio (turnos/recordatorios/pacientes): muestra su
-// error_detalle si viene con status "error". Devuelve el objeto o {}.
+// Groq / LLM (contrato 3.2+). Sin `status` propio: el pill sale de las
+// alertas del backend; sin alertas, "OK" si el bloque llegó con datos.
+function renderLlm(card, body, pill, block) {
+  if (!esObjeto(block) && !versionAlcanza("3.2")) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  renderBloqueSalud(
+    body,
+    pill,
+    block,
+    (b) => {
+      renderStats(body, [
+        {
+          label: "Groq — errores (24 h)",
+          value: fmt(b.errores_24h),
+          tone: toneAlertas("llm", "errores"),
+        },
+        {
+          label: "Groq — límite de tasa (24 h)",
+          value: fmt(b.rate_limit_24h),
+          tone: toneAlertas("llm", "rate_limit"),
+        },
+        { label: "Techo de tokens/min", value: fmt(b.techo_tpm), small: true },
+        {
+          label: "Ventana cubierta",
+          value: fmt(b.ventana_cubierta_horas, " h"),
+          small: true,
+          sub:
+            esDato(b.ventana_cubierta_horas) && Number(b.ventana_cubierta_horas) < 24
+              ? "La medición cubre menos de 24 h: los conteos son parciales."
+              : undefined,
+        },
+        {
+          label: "Proxy — derivaciones por error (24 h)",
+          value: fmt(b.proxy_sin_instrumentacion),
+          small: true,
+        },
+      ]);
+      // `proxy_sin_instrumentacion` es un CONTEO (negocio.derivaciones.ultimas_24h.error_sistema),
+      // nunca un booleano — es una referencia independiente de la instrumentación real,
+      // presente siempre que el bloque llega con datos.
+      if (esDato(b.proxy_sin_instrumentacion)) {
+        body.appendChild(
+          el("p", {
+            className: "nota",
+            text: "El proxy es una referencia independiente (derivaciones por error de sistema en 24 h) — no depende de que la instrumentación del bot esté activa.",
+          })
+        );
+      }
+    },
+    (b) => ({ tone: b.status === "error" ? "crit" : "good" }),
+    "llm"
+  );
+}
+
+// Sub-bloque de negocio: muestra su error_detalle si viene con status
+// "error". Devuelve el objeto o {}. `minVersion`: si el bloque falta, se
+// oculta (null) salvo que el contrato de la respuesta ya debería traerlo.
 function subBloque(container, obj) {
   const b = esObjeto(obj) ? obj : {};
   if (b.status === "error") renderErrorDetalle(container, b.error_detalle, "crit");
   return b;
+}
+
+// Crea un subgrupo con título, o null si el bloque no aplica a esta versión.
+function grupoNegocio(body, titulo, obj, minVersion) {
+  if (!esObjeto(obj) && !versionAlcanza(minVersion)) return null;
+  const grupo = el("div", { className: "subgrupo" });
+  grupo.appendChild(el("h3", { text: titulo }));
+  body.appendChild(grupo);
+  if (!esObjeto(obj)) {
+    grupo.appendChild(el("p", { className: "sin-datos", text: "sin datos" }));
+    return null;
+  }
+  return grupo;
+}
+
+function statNota(label, value, sub, extra) {
+  return { label, value, sub, ...(extra || {}) };
+}
+
+function renderTurnos(body, negocio, conReset) {
+  const grupo = el("div", { className: "subgrupo" });
+  grupo.appendChild(el("h3", { text: "Turnos" }));
+  const turnos = subBloque(grupo, negocio.turnos);
+  const creados = conReset
+    ? [{ label: "Creados desde el reset", value: fmt(turnos.creados_total) }]
+    : [
+        { label: "Creados (histórico)", value: fmt(turnos.creados_total) },
+        { label: "Creados (mes en curso)", value: fmt(turnos.creados_mes) },
+      ];
+  // Contrato 2.0: una sola tasa. 3.0+: 5 causas de baja + total + tasa total.
+  const legacy = "tasa_cancelacion_pct" in turnos && !("cancelados_total" in turnos);
+  const bajas = legacy
+    ? [
+        statNota("Cancelados — bot", fmt(turnos.cancelados_bot), "Paciente por menú."),
+        statNota("Cancelados — GCal", fmt(turnos.cancelados_gcal_manual), "Recepción (manual en GCal)."),
+        statNota(
+          "Tasa de cancelación",
+          fmtPct(turnos.tasa_cancelacion_pct),
+          "Paciente por menú + recepción; no incluye auto-cancelaciones."
+        ),
+      ]
+    : [
+        statNota("Cancelados — total", fmt(turnos.cancelados_total), "Suma de todas las causas."),
+        statNota(
+          "Tasa de cancelación total",
+          fmtPct(turnos.tasa_cancelacion_total_pct),
+          "Todas las causas de baja sobre los turnos creados."
+        ),
+        statNota("Paciente (menú)", fmt(turnos.cancelados_bot), null, { small: true }),
+        statNota("Paciente (recordatorio)", fmt(turnos.cancelados_bot_recordatorio), null, { small: true }),
+        statNota("Recepción (GCal manual)", fmt(turnos.cancelados_gcal_manual), null, { small: true }),
+        statNota(
+          "Automática por falta de confirmación",
+          fmt(turnos.cancelados_auto_sin_confirmacion),
+          null,
+          { small: true }
+        ),
+        statNota("Sin origen", fmt(turnos.cancelados_sin_origen), null, { small: true }),
+      ];
+  renderStats(grupo, [...creados, ...bajas]);
+  if (esDato(turnos.origenes_desconocidos) && turnos.origenes_desconocidos > 0) {
+    renderErrorDetalle(
+      grupo,
+      `Hay ${turnos.origenes_desconocidos} baja(s) con un origen que el panel no conoce.`,
+      "warn"
+    );
+  }
+  const porTipo = Array.isArray(turnos.por_tipo) ? turnos.por_tipo : [];
+  renderTablaPares(
+    grupo,
+    porTipo.map((t) => (esObjeto(t) ? [t.especialidad, t.cantidad] : [null, null])),
+    "Especialidad",
+    "Cantidad"
+  );
+  if (esDato(turnos.cohorte_definicion)) {
+    grupo.appendChild(
+      el("p", { className: "nota", text: `Cancelaciones: ${turnos.cohorte_definicion}` })
+    );
+  }
+  body.appendChild(grupo);
+}
+
+// Tabla genérica: cols = [{ h, get(fila) => texto, tone?(fila) => cell class }].
+function renderTablaFilas(container, filas, cols) {
+  if (!Array.isArray(filas) || filas.length === 0) return;
+  const wrap = el("div", { className: "tabla-simple table-wrap" });
+  const tabla = el("table");
+  const thead = el("thead");
+  const hr = el("tr");
+  for (const c of cols) hr.appendChild(el("th", { text: c.h }));
+  thead.appendChild(hr);
+  tabla.appendChild(thead);
+  const tbody = el("tbody");
+  filas.forEach((f, i) => {
+    const fila = esObjeto(f) ? f : {};
+    const tr = el("tr");
+    for (const c of cols) {
+      tr.appendChild(el("td", { className: c.clase ? c.clase(fila, i) : "", text: c.get(fila) }));
+    }
+    tbody.appendChild(tr);
+  });
+  tabla.appendChild(tbody);
+  wrap.appendChild(tabla);
+  container.appendChild(wrap);
+}
+
+function renderRecordatorios(body, negocio) {
+  const grupo = el("div", { className: "subgrupo" });
+  const rec = subBloque(grupo, negocio.recordatorios);
+  const nuevo = "proximos_dias" in rec || "wf3_corrida_hoy" in rec || "definicion" in rec;
+  const hayLegacy = "confirmados_manana" in rec || "recordatorios_enviados" in rec;
+
+  if (nuevo || !hayLegacy) {
+    grupo.insertBefore(el("h3", { text: "Recordatorios — próximos días" }), grupo.firstChild);
+    const wf3 = rec.wf3_corrida_hoy;
+    const wf3Txt =
+      wf3 === "ok" ? "corrió OK" : wf3 === "error" ? "corrió con error" : wf3 === "no_corrio" ? "todavía no corrió" : "sin datos";
+    const hoy = esObjeto(rec.hoy) ? rec.hoy : null;
+    const stats = [
+      {
+        label: "WF3 hoy",
+        value: wf3Txt,
+        small: true,
+        tone: wf3 === "error" ? "crit" : !esDato(wf3) ? "muted" : undefined,
+      },
+    ];
+    if (hoy) {
+      stats.push(
+        { label: "Enviados hoy", value: fmt(hoy.enviados), small: true },
+        { label: "Entregados hoy", value: fmt(hoy.entregados), small: true },
+        { label: "Sin entrega confirmada", value: fmt(hoy.sin_entrega_confirmada), small: true }
+      );
+    }
+    renderStats(grupo, stats);
+
+    // Resaltar en rojo "sin recordatorio previos" de MAÑANA (primer
+    // elemento) solo cuando el WF3 de hoy ya corrió.
+    const wf3Corrio = wf3 === "ok" || wf3 === "error";
+    const num = (k) => (f) => fmt(f[k]);
+    renderTablaFilas(
+      grupo,
+      Array.isArray(rec.proximos_dias) ? rec.proximos_dias : [],
+      [
+        { h: "Fecha", get: (f) => fmtDia(f.fecha) },
+        { h: "Vigentes", get: num("vigentes") },
+        { h: "Con recordatorio", get: num("con_recordatorio") },
+        { h: "Entregado", get: num("recordatorio_entregado") },
+        { h: "Confirmados", get: num("confirmados") },
+        { h: "Sin recordatorio", get: num("vigentes_sin_recordatorio") },
+        {
+          h: "Sin recordatorio (previos)",
+          get: num("vigentes_sin_recordatorio_previos"),
+          clase: (f, i) =>
+            i === 0 && wf3Corrio && esDato(f.vigentes_sin_recordatorio_previos) && f.vigentes_sin_recordatorio_previos > 0
+              ? "cell-crit"
+              : "",
+        },
+        { h: "Auto-canc.", get: num("cancelados_auto") },
+        { h: "Canc. paciente", get: num("cancelados_paciente") },
+        { h: "Canc. recepción", get: num("cancelados_recepcion") },
+      ]
+    );
+    grupo.appendChild(
+      el("p", {
+        className: "nota",
+        text:
+          (esDato(rec.definicion) ? `${rec.definicion} ` : "") +
+          "“Entregado” no es lo mismo que “enviado”. El reset no afecta esta sección.",
+      })
+    );
+  } else {
+    grupo.insertBefore(el("h3", { text: "Recordatorios — turnos de mañana" }), grupo.firstChild);
+    renderStats(grupo, [
+      { label: "Turnos agendados para mañana", value: fmt(rec.confirmados_manana) },
+      { label: "Con recordatorio enviado", value: fmt(rec.recordatorios_enviados) },
+      {
+        label: "Cobertura de recordatorio",
+        value: fmtPct(rec.tasa_exito_pct),
+        sub: "Antes de las 08:00 es normal que dé 0%: el envío corre a esa hora.",
+      },
+    ]);
+    grupo.appendChild(
+      el("p", {
+        className: "nota",
+        text:
+          "Foto de mañana (el reset no la afecta). Son turnos agendados, no confirmaciones del paciente; “enviado” no garantiza “entregado”.",
+      })
+    );
+  }
+  body.appendChild(grupo);
+}
+
+// Barra apilada + leyenda con texto (nunca color solo).
+function renderBarraApilada(container, partes, total) {
+  if (!esDato(total) || total <= 0) return;
+  const barra = el("div", { className: "barra-apilada" });
+  barra.setAttribute("role", "img");
+  barra.setAttribute(
+    "aria-label",
+    partes.map((p) => `${p.label}: ${fmt(p.valor)}`).join(", ")
+  );
+  const leyenda = el("ul", { className: "barra-leyenda" });
+  partes.forEach((p, i) => {
+    const v = esDato(p.valor) ? Number(p.valor) : 0;
+    if (v > 0) {
+      const seg = el("span", { className: `barra-seg barra-c${i + 1}` });
+      seg.style.width = `${Math.min(100, (v / total) * 100)}%`;
+      seg.title = `${p.label}: ${v}`;
+      barra.appendChild(seg);
+    }
+    const li = el("li");
+    li.appendChild(el("span", { className: `barra-clave barra-c${i + 1}` }));
+    li.appendChild(document.createTextNode(`${p.label}: ${fmt(p.valor)}`));
+    leyenda.appendChild(li);
+  });
+  container.appendChild(barra);
+  container.appendChild(leyenda);
+}
+
+function renderConfirmacion(body, negocio) {
+  const grupo = grupoNegocio(body, "Confirmación de turnos (embudo)", negocio.confirmacion, "3.0");
+  if (!grupo) return;
+  const c = subBloque(grupo, negocio.confirmacion);
+  renderStats(grupo, [
+    { label: "Recordatorios enviados", value: fmt(c.recordatorios_enviados) },
+    { label: "Sin botones", value: fmt(c.sin_botones), small: true },
+    { label: "En curso", value: fmt(c.en_curso), small: true },
+    { label: "Elegibles cerrados", value: fmt(c.elegibles_cerrados), small: true },
+    { label: "No entregados", value: fmt(c.no_entregados), small: true },
+    {
+      label: "Confirmación (paciente o recepción)",
+      value: fmtPct(c.tasa_confirmacion_pct),
+    },
+    {
+      label: "Auto-cancelación",
+      value: fmtPct(c.tasa_auto_cancelacion_pct),
+      sub: "Proxy de ausentismo (referencia sana: < 8-10%).",
+    },
+    { label: "Cancelación por el paciente", value: fmtPct(c.tasa_cancelacion_paciente_pct) },
+  ]);
+  renderBarraApilada(
+    grupo,
+    [
+      { label: "Confirmados", valor: c.confirmados },
+      { label: "Auto-cancelados", valor: c.auto_cancelados },
+      { label: "Cancelados por el paciente", valor: c.cancelados_paciente },
+      { label: "Cancelados por recepción", valor: c.cancelados_recepcion },
+      { label: "Sin resolución", valor: c.sin_resolucion },
+    ],
+    c.elegibles_cerrados
+  );
+  if (esDato(c.elegibles_cerrados) && c.elegibles_cerrados < 10) {
+    grupo.appendChild(
+      el("p", { className: "nota", text: "Muestra chica: menos de 10 turnos cerrados, los porcentajes son poco confiables." })
+    );
+  }
+  if (esDato(c.definicion)) grupo.appendChild(el("p", { className: "nota", text: String(c.definicion) }));
+}
+
+function renderAutoCancelacion(body, negocio) {
+  const grupo = grupoNegocio(body, "Auto-cancelación (WF6)", negocio.auto_cancelacion, "3.1");
+  if (!grupo) return;
+  const a = subBloque(grupo, negocio.auto_cancelacion);
+  renderStats(grupo, [
+    { label: "Corte de hoy", value: fmtFechaCorta(a.corte_hoy_at), small: true },
+    { label: "Pendientes de decisión", value: fmt(a.pendientes_de_decision) },
+    { label: "Auto-cancelados hoy", value: fmt(a.auto_cancelados_hoy) },
+  ]);
+  // Con semáforo (4.0) el aviso de "WF6 no decidió" lo decide el backend.
+  if (ALERTAS.length === 0 && !versionAlcanza("4.0")) {
+    const corte = parseFecha(a.corte_hoy_at);
+    if (corte && esDato(a.pendientes_de_decision) && a.pendientes_de_decision > 0 &&
+        Date.now() - corte.getTime() > 45 * 60000) {
+      renderErrorDetalle(grupo, "Pasó el corte y quedan turnos pendientes: WF6 no decidió.", "warn");
+    }
+  }
+  if (esDato(a.definicion)) grupo.appendChild(el("p", { className: "nota", text: String(a.definicion) }));
+}
+
+const MOTIVOS_PEDIDOS = [
+  ["explicito_menu", "Pedida por menú"],
+  ["explicito_texto", "Pedida por texto"],
+  ["explicito_ia", "Pedida (detectada por IA)"],
+  ["urgencia", "Urgencia"],
+];
+const MOTIVOS_FALLA = [
+  ["fallback_flujo", "Falla del flujo"],
+  ["fallback_ia", "Falla de la IA"],
+  ["error_sistema", "Error de sistema"],
+];
+
+function renderDerivaciones(body, negocio) {
+  const grupo = grupoNegocio(body, "Derivaciones a humano", negocio.derivaciones, "3.2");
+  if (!grupo) return;
+  const d = subBloque(grupo, negocio.derivaciones);
+  const pm = esObjeto(d.por_motivo) ? d.por_motivo : {};
+  const u = esObjeto(d.ultimas_24h) ? d.ultimas_24h : {};
+  const c = esObjeto(d.contencion_7d) ? d.contencion_7d : {};
+
+  let contencion = fmtPct(c.contencion_pct);
+  if (!esDato(c.contencion_pct) && esDato(c.dias_cubiertos)) {
+    contencion = `midiendo (${c.dias_cubiertos} de 7 días)`;
+  }
+  renderStats(grupo, [
+    { label: "Derivaciones (total)", value: fmt(d.total) },
+    { label: "En modo humano ahora", value: fmt(d.en_modo_humano_ahora) },
+    {
+      label: "Contención del bot (7 d)",
+      value: contencion,
+      tone: esDato(c.contencion_pct) ? undefined : "muted",
+      sub: esDato(c.conversaciones)
+        ? `${fmt(c.derivadas)} derivadas de ${c.conversaciones} conversaciones. Referencia: 70-85%.`
+        : "Referencia: 70-85%.",
+    },
+  ]);
+
+  grupo.appendChild(el("h4", { className: "subtitulo", text: "Pedidas por el paciente" }));
+  renderTablaPares(grupo, MOTIVOS_PEDIDOS.map(([k, l]) => [l, pm[k]]), "Motivo", "Cantidad");
+  grupo.appendChild(el("h4", { className: "subtitulo subtitulo-falla", text: "Por falla del bot" }));
+  renderTablaPares(grupo, MOTIVOS_FALLA.map(([k, l]) => [l, pm[k]]), "Motivo", "Cantidad");
+  if (esDato(pm.motivo_desconocido) && pm.motivo_desconocido > 0) {
+    renderErrorDetalle(grupo, `Hay ${pm.motivo_desconocido} derivación(es) con un motivo que el panel no conoce.`, "warn");
+  }
+  if (esObjeto(d.ultimas_24h)) {
+    renderStats(grupo, [
+      { label: "Últimas 24 h", value: fmt(u.total), small: true },
+      { label: "Error de sistema (24 h)", value: fmt(u.error_sistema), small: true },
+      { label: "Falla IA (24 h)", value: fmt(u.fallback_ia), small: true },
+      { label: "Falla flujo (24 h)", value: fmt(u.fallback_flujo), small: true },
+      { label: "Urgencia (24 h)", value: fmt(u.urgencia), small: true },
+    ]);
+  }
+}
+
+function renderPacientes(body, negocio, conReset) {
+  const grupo = el("div", { className: "subgrupo" });
+  grupo.appendChild(el("h3", { text: "Pacientes" }));
+  const pacientes = subBloque(grupo, negocio.pacientes);
+  renderStats(
+    grupo,
+    conReset
+      ? [{ label: "Altas desde el reset", value: fmt(pacientes.altas_total) }]
+      : [
+          { label: "Altas (histórico)", value: fmt(pacientes.altas_total) },
+          { label: "Altas (mes en curso)", value: fmt(pacientes.altas_mes) },
+        ]
+  );
+  body.appendChild(grupo);
 }
 
 function renderNegocio(body, negocio) {
@@ -630,83 +1253,209 @@ function renderNegocio(body, negocio) {
     );
     const conReset = esDato(negocio.reset_desde);
 
-    // --- Turnos
-    const grupoTurnos = el("div", { className: "subgrupo" });
-    grupoTurnos.appendChild(el("h3", { text: "Turnos" }));
-    const turnos = subBloque(grupoTurnos, negocio.turnos);
-    const creados = conReset
-      ? [{ label: "Creados desde el reset", value: fmt(turnos.creados_total) }]
-      : [
-          { label: "Creados (histórico)", value: fmt(turnos.creados_total) },
-          { label: "Creados (mes en curso)", value: fmt(turnos.creados_mes) },
-        ];
-    renderStats(grupoTurnos, [
-      ...creados,
-      { label: "Cancelados — bot", value: fmt(turnos.cancelados_bot), sub: "Paciente por menú." },
-      {
-        label: "Cancelados — GCal",
-        value: fmt(turnos.cancelados_gcal_manual),
-        sub: "Recepción (manual en GCal).",
-      },
-      {
-        label: "Tasa de cancelación",
-        value: fmtPct(turnos.tasa_cancelacion_pct),
-        sub: "Paciente por menú + recepción; no incluye auto-cancelaciones.",
-      },
-    ]);
-    const porTipo = Array.isArray(turnos.por_tipo) ? turnos.por_tipo : [];
-    renderTablaPares(
-      grupoTurnos,
-      porTipo.map((t) => (esObjeto(t) ? [t.especialidad, t.cantidad] : [null, null])),
-      "Especialidad",
-      "Cantidad"
-    );
-    if (esDato(turnos.cohorte_definicion)) {
-      grupoTurnos.appendChild(
-        el("p", { className: "nota", text: `Cancelaciones: ${turnos.cohorte_definicion}` })
-      );
-    }
-    body.appendChild(grupoTurnos);
-
-    // --- Recordatorios (foto de mañana; el reset no la toca)
-    const grupoRecordatorios = el("div", { className: "subgrupo" });
-    grupoRecordatorios.appendChild(el("h3", { text: "Recordatorios — turnos de mañana" }));
-    const recordatorios = subBloque(grupoRecordatorios, negocio.recordatorios);
-    renderStats(grupoRecordatorios, [
-      { label: "Turnos agendados para mañana", value: fmt(recordatorios.confirmados_manana) },
-      { label: "Con recordatorio enviado", value: fmt(recordatorios.recordatorios_enviados) },
-      {
-        label: "Cobertura de recordatorio",
-        value: fmtPct(recordatorios.tasa_exito_pct),
-        sub: "Antes de las 08:00 es normal que dé 0%: el envío corre a esa hora.",
-      },
-    ]);
-    grupoRecordatorios.appendChild(
-      el("p", {
-        className: "nota",
-        text:
-          "Foto de mañana (el reset no la afecta). Son turnos agendados, no confirmaciones del paciente; “enviado” no garantiza “entregado”.",
-      })
-    );
-    body.appendChild(grupoRecordatorios);
-
-    // --- Pacientes
-    const grupoPacientes = el("div", { className: "subgrupo" });
-    grupoPacientes.appendChild(el("h3", { text: "Pacientes" }));
-    const pacientes = subBloque(grupoPacientes, negocio.pacientes);
-    renderStats(
-      grupoPacientes,
-      conReset
-        ? [{ label: "Altas desde el reset", value: fmt(pacientes.altas_total) }]
-        : [
-            { label: "Altas (histórico)", value: fmt(pacientes.altas_total) },
-            { label: "Altas (mes en curso)", value: fmt(pacientes.altas_mes) },
-          ]
-    );
-    body.appendChild(grupoPacientes);
+    // Cada sub-bloque va aislado: uno roto no tira los demás.
+    const seccion = (nombre, fn) => {
+      try {
+        fn();
+      } catch (err) {
+        console.error(`Error renderizando ${nombre}:`, err);
+        body.appendChild(el("p", { className: "sin-datos", text: `${nombre}: sin datos (error al mostrar)` }));
+      }
+    };
+    seccion("Turnos", () => renderTurnos(body, negocio, conReset));
+    seccion("Recordatorios", () => renderRecordatorios(body, negocio));
+    seccion("Confirmación", () => renderConfirmacion(body, negocio));
+    seccion("Auto-cancelación", () => renderAutoCancelacion(body, negocio));
+    seccion("Derivaciones", () => renderDerivaciones(body, negocio));
+    seccion("Pacientes", () => renderPacientes(body, negocio, conReset));
   } catch (err) {
     console.error("Error renderizando negocio:", err);
     renderSinDatos(body, "sin datos (error al mostrar este bloque)");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tendencia 7 días (contrato 4.0) — sparklines SVG propios, sin librerías.
+// ---------------------------------------------------------------------------
+
+const SERIES_TENDENCIA = [
+  ["turnos_creados", "Turnos creados"],
+  ["recordatorios_enviados", "Recordatorios enviados"],
+  ["confirmaciones", "Confirmaciones"],
+  ["auto_cancelados", "Auto-cancelados"],
+  ["derivaciones", "Derivaciones"],
+  ["mensajes_facturables", "Mensajes facturables"],
+];
+
+function buildSparkline(dias, clave) {
+  const W = 120;
+  const H = 32;
+  const PAD = 3;
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("class", "sparkline");
+  svg.setAttribute("role", "img");
+  const valores = dias.map((d) => (esObjeto(d) && esDato(d[clave]) ? Number(d[clave]) : null));
+  svg.setAttribute(
+    "aria-label",
+    dias.map((d, i) => `${fmtDia(esObjeto(d) ? d.fecha : null)}: ${fmt(valores[i])}`).join(", ")
+  );
+  const nums = valores.filter((v) => v !== null);
+  if (nums.length === 0) return svg;
+  const max = Math.max(...nums);
+  const min = Math.min(...nums, 0);
+  const rango = max - min || 1;
+  const x = (i) => PAD + (dias.length > 1 ? (i * (W - 2 * PAD)) / (dias.length - 1) : 0);
+  const y = (v) => H - PAD - ((v - min) / rango) * (H - 2 * PAD);
+
+  // Línea sólida por tramos contiguos; el tramo hacia el día parcial va punteado.
+  for (let i = 1; i < dias.length; i++) {
+    if (valores[i] === null || valores[i - 1] === null) continue;
+    const seg = document.createElementNS(SVG_NS, "line");
+    seg.setAttribute("x1", x(i - 1));
+    seg.setAttribute("y1", y(valores[i - 1]));
+    seg.setAttribute("x2", x(i));
+    seg.setAttribute("y2", y(valores[i]));
+    seg.setAttribute("class", esObjeto(dias[i]) && dias[i].parcial === true ? "spark-seg spark-parcial" : "spark-seg");
+    svg.appendChild(seg);
+  }
+  dias.forEach((d, i) => {
+    if (valores[i] === null) return;
+    const parcial = esObjeto(d) && d.parcial === true;
+    const dot = document.createElementNS(SVG_NS, "circle");
+    dot.setAttribute("cx", x(i));
+    dot.setAttribute("cy", y(valores[i]));
+    dot.setAttribute("r", parcial ? "3" : "2");
+    dot.setAttribute("class", parcial ? "spark-dot spark-dot-parcial" : "spark-dot");
+    const t = document.createElementNS(SVG_NS, "title");
+    t.textContent = `${fmtDia(esObjeto(d) ? d.fecha : null)}: ${valores[i]}${parcial ? " (día en curso, parcial)" : ""}`;
+    dot.appendChild(t);
+    svg.appendChild(dot);
+  });
+  return svg;
+}
+
+function renderTendencia(card, body, negocio) {
+  const dias = esObjeto(negocio) && Array.isArray(negocio.tendencia_7d) ? negocio.tendencia_7d : null;
+  if (!dias && !versionAlcanza("4.0")) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  try {
+    clear(body);
+    if (esObjeto(negocio) && negocio.tendencia_status === "error") {
+      renderErrorDetalle(body, negocio.tendencia_error_detalle || negocio.tendencia_detalle, "crit");
+    }
+    if (!dias || dias.length === 0) {
+      body.appendChild(el("p", { className: "sin-datos", text: "sin datos" }));
+      return;
+    }
+    const grilla = el("div", { className: "sparks" });
+    for (const [clave, label] of SERIES_TENDENCIA) {
+      const item = el("div", { className: "spark-item" });
+      item.appendChild(el("span", { className: "stat-label", text: label }));
+      const ultimo = dias[dias.length - 1];
+      item.appendChild(
+        el("span", {
+          className: "stat-value small",
+          text: fmt(esObjeto(ultimo) ? ultimo[clave] : null),
+        })
+      );
+      item.appendChild(buildSparkline(dias, clave));
+      grilla.appendChild(item);
+    }
+    body.appendChild(grilla);
+    const desde = esObjeto(dias[0]) ? fmtDia(dias[0].fecha) : "?";
+    const hasta = esObjeto(dias[dias.length - 1]) ? fmtDia(dias[dias.length - 1].fecha) : "?";
+    const parcial = dias.some((d) => esObjeto(d) && d.parcial === true);
+    body.appendChild(
+      el("p", {
+        className: "nota",
+        text:
+          `Últimos 7 días (AR): ${desde} – ${hasta}, incluido hoy.` +
+          (parcial ? " El punto hueco / tramo punteado es el día en curso (parcial)." : ""),
+      })
+    );
+  } catch (err) {
+    console.error("Error renderizando tendencia:", err);
+    renderSinDatos(body, "sin datos (error al mostrar este bloque)");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Semáforo global (contrato 4.0) — resumen.estado + resumen.alertas[].
+// ---------------------------------------------------------------------------
+
+const ESTADO_SEMAFORO = {
+  ok: { tone: "good", label: "Todo OK" },
+  advertencia: { tone: "warn", label: "Advertencia" },
+  critico: { tone: "crit", label: "Crítico" },
+  sin_datos: { tone: "unk", label: "Sin datos" },
+};
+
+function renderSemaforo(card, resumen) {
+  if (!esObjeto(resumen)) {
+    // Contrato < 4.0 no lo publica: se oculta. En 4.0, su ausencia es "sin datos".
+    if (!versionAlcanza("4.0")) {
+      card.hidden = true;
+      return;
+    }
+  }
+  card.hidden = false;
+  clear(card);
+  try {
+    const r = esObjeto(resumen) ? resumen : {};
+    const alertas = (Array.isArray(r.alertas) ? r.alertas : []).filter(esObjeto);
+    const crit = alertas.filter((a) => severidadATono(a.severidad) === "crit");
+    const warn = alertas.filter((a) => severidadATono(a.severidad) !== "crit");
+    const est = ESTADO_SEMAFORO[String(r.estado || "").toLowerCase()] || ESTADO_SEMAFORO.sin_datos;
+    card.className = `semaforo semaforo-${est.tone}`;
+
+    const cab = el("div", { className: "semaforo-cab" });
+    cab.appendChild(buildIcon(est.tone));
+    let titulo = est.label;
+    if (alertas.length > 0) {
+      titulo = `${est.label}: ${plural(warn.length, "advertencia", "advertencias")}, ${plural(crit.length, "crítico", "críticos")}`;
+    }
+    cab.appendChild(el("strong", { className: "semaforo-titulo", text: titulo }));
+    card.appendChild(cab);
+
+    if (!esObjeto(resumen)) {
+      card.appendChild(el("p", { className: "semaforo-nota", text: "El backend no publicó el resumen global." }));
+    } else if (est.tone === "unk") {
+      card.appendChild(el("p", { className: "semaforo-nota", text: "No se pudo medir ningún bloque de salud." }));
+    }
+
+    if (alertas.length > 0) {
+      const ul = el("ul", { className: "semaforo-lista" });
+      // Críticas primero.
+      for (const a of [...crit, ...warn]) {
+        const tone = severidadATono(a.severidad);
+        const li = el("li", { className: `semaforo-item semaforo-item-${tone}` });
+        li.appendChild(buildIcon(tone));
+        const txt = el("span", { className: "semaforo-msg" });
+        txt.appendChild(el("span", { text: esDato(a.mensaje) ? String(a.mensaje) : String(a.codigo || "Alerta sin mensaje") }));
+        const det = [];
+        // `campo` ya es el path completo (incluye `bloque` como prefijo, ej.
+        // "salud.n8n.workflows[WF1_Bot_WhatsApp].tasa_error_pct") — mostrar
+        // los dos concatenados duplicaba el prefijo. Si no hay `campo`,
+        // `bloque` solo sigue siendo útil como referencia del bloque entero.
+        if (esDato(a.campo)) det.push(String(a.campo));
+        else if (esDato(a.bloque)) det.push(String(a.bloque));
+        if (esDato(a.valor)) det.push(`valor ${a.valor}${esDato(a.umbral) ? ` (umbral ${a.umbral})` : ""}`);
+        if (esDato(a.codigo)) det.push(String(a.codigo));
+        if (det.length) txt.appendChild(el("small", { className: "semaforo-det", text: det.join(" · ") }));
+        li.appendChild(txt);
+        ul.appendChild(li);
+      }
+      card.appendChild(ul);
+    }
+  } catch (err) {
+    console.error("Error renderizando el semáforo:", err);
+    card.className = "semaforo semaforo-unk";
+    clear(card);
+    card.appendChild(el("strong", { text: "Semáforo: sin datos (error al mostrarlo)" }));
   }
 }
 
@@ -1002,7 +1751,11 @@ function render(dataCruda) {
     ? `${fmt(data.environment)} (mock local)`
     : fmt(data.environment);
 
-  renderContrato(versionContrato(data));
+  const version = versionContrato(data);
+  VERSION_ACTUAL = parseVersion(version);
+  ALERTAS = esObjeto(data.resumen) && Array.isArray(data.resumen.alertas) ? data.resumen.alertas : [];
+  renderContrato(version);
+  renderSemaforo(document.getElementById("semaforo"), data.resumen);
 
   document.getElementById("ultima-actualizacion").textContent =
     `Última actualización: ${fmtFecha(data.generated_at)}`;
@@ -1030,8 +1783,16 @@ function render(dataCruda) {
     salud.infra
   );
 
+  renderLlm(
+    document.getElementById("panel-llm"),
+    document.getElementById("llm-body"),
+    document.getElementById("llm-status"),
+    salud.llm
+  );
+
   renderNegocio(document.getElementById("negocio-body"), data.negocio);
   renderCostos(document.getElementById("costos-body"), data.negocio);
+  renderTendencia(document.getElementById("panel-tendencia"), document.getElementById("tendencia-body"), data.negocio);
 }
 
 // ---------------------------------------------------------------------------
