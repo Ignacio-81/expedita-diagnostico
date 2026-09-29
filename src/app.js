@@ -1437,7 +1437,12 @@ function renderSemaforo(card, resumen) {
         const txt = el("span", { className: "semaforo-msg" });
         txt.appendChild(el("span", { text: esDato(a.mensaje) ? String(a.mensaje) : String(a.codigo || "Alerta sin mensaje") }));
         const det = [];
-        if (esDato(a.bloque) || esDato(a.campo)) det.push([a.bloque, a.campo].filter(esDato).join("."));
+        // `campo` ya es el path completo (incluye `bloque` como prefijo, ej.
+        // "salud.n8n.workflows[WF1_Bot_WhatsApp].tasa_error_pct") — mostrar
+        // los dos concatenados duplicaba el prefijo. Si no hay `campo`,
+        // `bloque` solo sigue siendo útil como referencia del bloque entero.
+        if (esDato(a.campo)) det.push(String(a.campo));
+        else if (esDato(a.bloque)) det.push(String(a.bloque));
         if (esDato(a.valor)) det.push(`valor ${a.valor}${esDato(a.umbral) ? ` (umbral ${a.umbral})` : ""}`);
         if (esDato(a.codigo)) det.push(String(a.codigo));
         if (det.length) txt.appendChild(el("small", { className: "semaforo-det", text: det.join(" · ") }));
