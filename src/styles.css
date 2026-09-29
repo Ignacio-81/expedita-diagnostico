@@ -786,3 +786,90 @@ tbody tr:hover {
     gap: 0.75rem;
   }
 }
+
+/* ---------------------------------------------------------------------
+ * Contrato 4.0 — semáforo global, LLM, embudo, derivaciones, tendencia
+ * --------------------------------------------------------------------- */
+.semaforo {
+  margin: 1rem 0 0;
+  padding: 0.9rem 1.1rem;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  border-left-width: 6px;
+  background: var(--surface);
+}
+.semaforo[hidden] { display: none; }
+.semaforo-good { border-color: var(--good); background: var(--good-bg); color: var(--good-text); }
+.semaforo-warn { border-color: var(--warn); background: var(--warn-bg); color: var(--warn-text); }
+.semaforo-crit { border-color: var(--crit); background: var(--crit-bg); color: var(--crit-text); }
+.semaforo-unk { border-color: var(--border); background: var(--unk-bg); color: var(--unk-text); }
+.semaforo-cab { display: flex; align-items: center; gap: 0.6rem; }
+.semaforo-cab svg { width: 26px; height: 26px; flex-shrink: 0; }
+.semaforo-titulo { font-size: 1.2rem; }
+.semaforo-nota { margin: 0.4rem 0 0; font-size: 0.875rem; }
+.semaforo-lista { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; gap: 0.45rem; }
+.semaforo-item { display: flex; gap: 0.5rem; align-items: flex-start; font-size: 0.9375rem; font-weight: 600; }
+.semaforo-item svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px; }
+.semaforo-item-crit svg { color: var(--crit-text); }
+.semaforo-item-warn svg { color: var(--warn-text); }
+.semaforo-msg { display: flex; flex-direction: column; overflow-wrap: anywhere; }
+.semaforo-det { font-weight: 400; font-size: 0.78rem; opacity: 0.85; }
+
+.tag-alerta {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--warn-text);
+}
+.meter-warn { background: var(--warn); }
+.meter-crit { background: var(--crit); }
+
+.subtitulo { margin: 0.9rem 0 0.2rem; font-size: 0.8125rem; color: var(--text-2); }
+.subtitulo-falla { color: var(--crit-text); }
+
+.barra-apilada {
+  display: flex;
+  height: 14px;
+  margin-top: 0.7rem;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.barra-seg { display: block; height: 100%; }
+.barra-c1 { background: var(--good); }
+.barra-c2 { background: var(--crit); }
+.barra-c3 { background: var(--warn); }
+.barra-c4 { background: var(--accent); }
+.barra-c5 { background: var(--text-muted); }
+.barra-leyenda {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+}
+.barra-clave {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 0.35rem;
+}
+
+.sparks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 1rem;
+}
+.spark-item { display: flex; flex-direction: column; gap: 0.15rem; }
+.sparkline { width: 100%; height: 34px; overflow: visible; }
+.spark-seg { stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; }
+.spark-parcial { stroke-dasharray: 3 3; }
+.spark-dot { fill: var(--accent); }
+.spark-dot-parcial { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; }
+.card[hidden] { display: none; }

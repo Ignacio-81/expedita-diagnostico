@@ -52,6 +52,8 @@
     </span>
   </div>
 
+  <section class="semaforo semaforo-unk" id="semaforo" role="status" aria-live="polite" hidden></section>
+
   <main class="grid">
 
     <section class="card col-12" id="panel-n8n" aria-labelledby="h-n8n">
@@ -94,6 +96,16 @@
       </div>
     </section>
 
+    <section class="card col-12" id="panel-llm" aria-labelledby="h-llm" hidden>
+      <div class="card-head">
+        <h2 id="h-llm">Groq / LLM</h2>
+        <span class="pill" id="llm-status">—</span>
+      </div>
+      <div class="card-body" id="llm-body">
+        <p class="sin-datos">Cargando…</p>
+      </div>
+    </section>
+
     <section class="card col-8" id="panel-negocio" aria-labelledby="h-negocio">
       <div class="card-head">
         <h2 id="h-negocio">Turnos / Negocio</h2>
@@ -112,6 +124,15 @@
       </div>
       <p class="reset-aviso" id="reset-aviso-costos" role="status" hidden></p>
       <div class="card-body" id="costos-body">
+        <p class="sin-datos">Cargando…</p>
+      </div>
+    </section>
+
+    <section class="card col-12" id="panel-tendencia" aria-labelledby="h-tendencia" hidden>
+      <div class="card-head">
+        <h2 id="h-tendencia">Tendencia — últimos 7 días</h2>
+      </div>
+      <div class="card-body" id="tendencia-body">
         <p class="sin-datos">Cargando…</p>
       </div>
     </section>
