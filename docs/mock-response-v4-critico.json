@@ -127,7 +127,7 @@
       "rate_limit_24h": 2,
       "ventana_cubierta_horas": 9,
       "techo_tpm": 6000,
-      "proxy_sin_instrumentacion": true
+      "proxy_sin_instrumentacion": 4
     }
   },
   "negocio": {
@@ -368,29 +368,29 @@
     "estado": "critico",
     "alertas": [
       {
-        "codigo": "N8N_TASA_ERROR_OPERATIVA",
+        "codigo": "wf1_tasa_error",
         "severidad": "advertencia",
-        "bloque": "n8n",
-        "campo": "tasa_error_operativa_pct",
-        "mensaje": "La tasa de error operativa de n8n supera el umbral.",
+        "bloque": "salud.n8n",
+        "campo": "salud.n8n.workflows[WF1_Bot_WhatsApp].tasa_error_pct",
+        "mensaje": "WF1_Bot_WhatsApp con tasa de error 7.5% (umbral 5%)",
         "valor": 7.5,
         "umbral": 5
       },
       {
-        "codigo": "WF6_NO_CORRIO",
+        "codigo": "wf6_atrasado",
         "severidad": "critico",
-        "bloque": "n8n",
-        "campo": "workflows.WF6_Auto_Cancelacion.horas_desde_ultima_corrida",
-        "mensaje": "WF6 no corre hace más de 1 hora.",
+        "bloque": "salud.n8n",
+        "campo": "salud.n8n.workflows[WF6_Auto_Cancelacion].horas_desde_ultima_corrida",
+        "mensaje": "WF6_Auto_Cancelacion sin corrida OK hace 3.2 h (umbral 1 h)",
         "valor": 3.2,
         "umbral": 1
       },
       {
-        "codigo": "DB_ESPACIO",
+        "codigo": "db_espacio",
         "severidad": "advertencia",
-        "bloque": "db",
-        "campo": "espacio_usado_mb",
-        "mensaje": "El proyecto Supabase usa más del 80% del espacio.",
+        "bloque": "salud.db",
+        "campo": "salud.db.espacio_usado_mb",
+        "mensaje": "El proyecto Supabase usa 420 MB de 500 MB (umbral 400 MB)",
         "valor": 420,
         "umbral": 400
       }

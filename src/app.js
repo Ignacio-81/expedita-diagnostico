@@ -857,12 +857,20 @@ function renderLlm(card, body, pill, block) {
               ? "La medición cubre menos de 24 h: los conteos son parciales."
               : undefined,
         },
+        {
+          label: "Proxy — derivaciones por error (24 h)",
+          value: fmt(b.proxy_sin_instrumentacion),
+          small: true,
+        },
       ]);
-      if (b.proxy_sin_instrumentacion === true) {
+      // `proxy_sin_instrumentacion` es un CONTEO (negocio.derivaciones.ultimas_24h.error_sistema),
+      // nunca un booleano — es una referencia independiente de la instrumentación real,
+      // presente siempre que el bloque llega con datos.
+      if (esDato(b.proxy_sin_instrumentacion)) {
         body.appendChild(
           el("p", {
             className: "nota",
-            text: "Medición aproximada (proxy): el bot todavía no está instrumentado para este dato.",
+            text: "El proxy es una referencia independiente (derivaciones por error de sistema en 24 h) — no depende de que la instrumentación del bot esté activa.",
           })
         );
       }

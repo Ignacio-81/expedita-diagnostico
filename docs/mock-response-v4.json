@@ -127,7 +127,7 @@
       "rate_limit_24h": 2,
       "ventana_cubierta_horas": 24,
       "techo_tpm": 6000,
-      "proxy_sin_instrumentacion": false
+      "proxy_sin_instrumentacion": 0
     }
   },
   "negocio": {

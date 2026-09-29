@@ -237,6 +237,20 @@ Mocks: `mock-response-v4.json` (todo sano) y `mock-response-v4-critico.json`
   (embudo, WF6, derivaciones a humano).
 - `negocio.tendencia_7d[7]` (+ `tendencia_status: "error"` si falla).
 
-**Supuestos a validar contra el backend real:** forma exacta de
-`alertas[].bloque`/`campo` (el matching es por subcadena, en minúsculas);
-ubicación de `tendencia_status`; significado de `proxy_sin_instrumentacion`.
+**Validado contra un payload real de `test-mock` (2026-09-29):**
+- `alertas[].bloque` es el path con notación de punto hasta el bloque
+  (`"salud.n8n"`, `"negocio.derivaciones"`, nunca el nombre bare) y `.campo` es
+  el path completo hasta la hoja, con el nombre del workflow **entre corchetes
+  sin comillas** cuando aplica (`"salud.n8n.workflows[WF2_Sync_Feriados].horas_desde_ultima_corrida"`).
+  El matching por subcadena en minúsculas de `toneAlertas()` funciona bien
+  contra esta forma real (confirmado). `valor` viene con el tipo nativo del
+  dato (number/boolean), nunca forzado a string.
+- `negocio.tendencia_status` **no existe cuando la tendencia está sana** —
+  solo se agrega (`"error"`) si la query de 7 días falla. El front ya lo trata
+  bien (`negocio.tendencia_status === "error"` da `false` con el campo
+  ausente, sin romper nada).
+- `salud.llm.proxy_sin_instrumentacion` es un **número** (conteo, copia de
+  `negocio.derivaciones.ultimas_24h.error_sistema`), **nunca un booleano**.
+  ⚠️ Esto rompía la nota original (`=== true` nunca daba verdadero) — corregido
+  el 2026-09-29 para mostrarlo como estadística + nota explicativa. Mocks
+  actualizados a la forma numérica real.
