@@ -5,7 +5,16 @@ Staging: salud del sistema (n8n, DB, Meta/WhatsApp, infraestructura) y
 negocio/costos. Sin historial — solo snapshot del momento.
 
 Frontend estático (`src/`) que consume vía `fetch()` un webhook JSON
-expuesto por n8n.
+expuesto por n8n. Dos páginas con la misma barra superior:
+
+| Página | URL | Contenido |
+|---|---|---|
+| Diagnóstico | `/` (`index.html`) | Salud operativa (n8n, DB, Meta, infra, Groq), semáforo, turnos/negocio, tendencia. Botón "Resetear medición" de Turnos/Negocio. |
+| Costos y mensajes | `/costos` (`costos.html`) | Costos de Meta medidos y estimados, cupo gratuito de service, estadística de mensajes, "Cómo se calcula". Botón "Resetear medición" de Costos. |
+
+Para desarrollar sin backend: servir la raíz del repo (`python3 -m http.server`)
+y abrir `http://localhost:8000/src/costos.html?mock=staging`. Los fixtures
+(`fixtures/`, ver su README) se eligen con `?mock=staging|cupo-agotado|cupo-se-agota|cupo-null|estimado-null|legacy`.
 
 ## ⚠️ El backend no vive acá
 

@@ -254,3 +254,57 @@ Mocks: `mock-response-v4.json` (todo sano) y `mock-response-v4-critico.json`
   ⚠️ Esto rompía la nota original (`=== true` nunca daba verdadero) — corregido
   el 2026-09-29 para mostrarlo como estadística + nota explicativa. Mocks
   actualizados a la forma numérica real.
+
+## Delta de costos — reglas por mensaje de Meta (2026-10-02, `contract_version` sigue `"4.0"`)
+
+Aditivo: **todo campo de esta sección es opcional** (un ambiente sin actualizar,
+p. ej. Develop/Test, no lo publica; el front cae a "sin datos" sin romper).
+Fixtures completos en [`fixtures/`](../fixtures/README.md).
+
+Desde el 1/10/2026 Meta cobra **por mensaje entregado**, solo lo que llega
+`billable=true`. Los `service` (respuestas del bot dentro de la ventana de
+24 h) tienen un cupo gratuito de 1.000/mes por número (mes calendario en la
+zona horaria de la cuenta de Meta; no acumula); desde el 1.001 se cobran.
+
+`negocio.costos`:
+
+| Campo | Semántica | Dónde se muestra |
+|---|---|---|
+| `meta_medido_ars` | Costo REAL de lo cobrado por Meta (billable y entregado), tarifa según la fecha de cada mensaje. **Dato principal.** | Costos → "Medido: lo que Meta cobró" |
+| `meta_proyectado_per_message_ars` | **DEPRECADO**: mismo valor que `meta_medido_ars`. No es métrica aparte; solo fallback si falta el medido. | (solo fallback) |
+| `meta_proyeccion_mes_calendario_ars` | Proyección del mes en curso: lo cobrado hasta hoy + ritmo de 30 días, con cupo. | Costos → "Proyección del mes en curso" |
+| `meta_medido_proyeccion_mes_ars` | Proyección LINEAL de la ventana; subestima si el cupo se agota en el mes. | Costos → "Proyección lineal de la ventana" (secundaria) |
+| `meta_estimado_ars` | Estimado mensual de régimen = 30 × turnos/día × costo por turno (utility/auth/marketing) + tarifa service × max(0, 30 × turnos/día × service por turno − 1000). | Costos → "Estimado mensual de régimen" |
+| `meta_estimado_fuente` | `"medido"` (≥ 14 días y ≥ 20 turnos desde el 1/10) \| `"supuesto"` (1 utility + `meta_estimado_service_por_turno` service por turno, NO medido) \| `null` (⇒ `meta_estimado_ars` también `null`). | Badge junto al estimado |
+| `meta_estimado_costo_por_turno_ars` | Promedio derivado (con cupo depende del volumen). | Costos → "Costo por turno" |
+| `meta_estimado_service_por_turno` | Supuesto de service por turno. | Texto del badge "supuesto" |
+| `meta_estimado_muestra` | `{desde, dias, turnos, mensajes_cobrados, service_entregados}`. | Costos → "Muestra usada" (colapsable) |
+| `groq_estimado_usd` | Siempre estimado; `null` con < 7 días. | Costos → Groq |
+| `cupo_service` | Bloque nuevo (puede ser `null` completo). Ver abajo. | Costos → "Cupo gratuito de service" |
+| `mensajes_medidos`, `mensajes_por_categoria {service,utility,marketing,authentication}` | Total y por categoría de la ventana. | Mensajes |
+| `medicion_desde`, `medicion_dias`, `medicion_mes_completo` (`null` = no aplica), `reset_desde` | Ventana de medición. | Encabezado de Costos |
+| `pricing_per_message_vigente` | bool. `false` ⇒ aviso en el panel. | Aviso en Costos |
+| `nota` | Texto largo ASCII que explica todo. | "Cómo se calcula" → "Nota del backend" (sin truncar) |
+
+`negocio.costos.cupo_service` (o `null` si la zona no es válida / falla la query):
+`{cupo_mes, mes ("2026-10"), zona_horaria, consumidos_mes, restantes,
+agotado_observado, agotado_observado_at, ritmo_diario, ritmo_dias_base,
+fecha_agotamiento_estimada, se_agota_este_mes}`.
+
+- **MEDIDOS:** `consumidos_mes`, `restantes`, `agotado_observado` (true = Meta ya
+  cobró al menos un service este mes; entonces `restantes` = 0).
+- **ESTIMADOS** (`null` con < 7 días de datos): `ritmo_diario`,
+  `fecha_agotamiento_estimada`, `se_agota_este_mes`.
+- `zona_horaria` es la **configurada**; puede no coincidir con la de la cuenta
+  de Meta (no verificada). El panel cuenta solo los mensajes que manda el bot.
+  Sin método de pago en Meta, al agotarse el cupo Meta deja de entregar las
+  respuestas del bot.
+
+Otros campos usados por la página de costos (ya existentes):
+`negocio.tendencia_7d[].mensajes_facturables` / `turnos_creados` /
+`recordatorios_enviados` / `parcial` y
+`salud.n8n.trafico_wf1.mensajes_procesados_24h` (+ `fuente`, `nota`).
+
+**No verificado** (no afirmarlo como hecho en la UI): si las utility enviadas
+dentro de la ventana se cobran desde el 1/10; la tarifa de service después del
+cupo (se asume la de utility).

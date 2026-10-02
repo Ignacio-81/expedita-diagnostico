@@ -2,8 +2,10 @@
 
 Panel de diagnóstico de uso interno (solo Ignacio): un vistazo al estado de
 Staging — salud del sistema (n8n, DB, Meta/WhatsApp, infraestructura) y
-negocio/costos. Una sola página, sin routing, sin historial — solo snapshot
-del momento vía `fetch()` a un webhook que devuelve JSON. Ver
+negocio/costos. Dos páginas estáticas (`src/index.html` = Diagnóstico,
+`src/costos.html` = Costos y mensajes), sin routing de framework, sin
+historial — solo snapshot del momento vía `fetch()` a un webhook que devuelve
+JSON. Ver
 [docs/SPEC.md](docs/SPEC.md) para la especificación completa.
 
 ## El backend NO vive acá
