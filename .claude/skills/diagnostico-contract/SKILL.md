@@ -101,14 +101,17 @@ dato medido → `0` / `$ 0`. Importa sobre todo en costos
 
 ## Requisitos de UI
 
-- Una página, sin routing. Fetch al cargar + botón "Actualizar" (sin
+- Dos páginas estáticas (`index.html` Diagnóstico, `costos.html` Costos y mensajes; mismo `app.js`, `<body data-pagina>` decide qué se renderiza; la navegación conserva la query). Fetch al cargar + botón "Actualizar" (sin
   auto-refresh hasta el contrato 4.0, y ahí opt-in).
 - Negocio: encabezado "Histórico completo (sin reset)" / "Midiendo desde…"
   / "Empieza el…". Con reset, una sola cifra "desde el reset" para creados
   y altas; sin reset, histórico + mes en curso.
-- Costos: con `pricing_per_message_vigente: false` la cifra destacada es
-  `meta_proyectado_per_message_ars`; con `true`, `meta_medido_ars`.
-- Reset: dos botones independientes con confirmación previa, handler
+- Costos (página `costos.html`, renderers en `src/costos.js`): la cifra
+  destacada es SIEMPRE `meta_medido_ars`. `meta_proyectado_per_message_ars` está
+  deprecado (mismo valor): solo fallback si falta el medido. Campos nuevos
+  (`cupo_service`, `meta_estimado_fuente`, `meta_proyeccion_mes_calendario_ars`…)
+  son opcionales. Detalle en el delta final de `docs/CONTRATO_JSON.md`.
+- Reset: dos botones independientes (Turnos/Negocio en Diagnóstico, Costos en Costos y mensajes) con confirmación previa, handler
   entero en `try/catch`, error visible. Tras el `200` → **GET completo**; si
   falla, parchear solo el encabezado y avisar. Mostrar
   `desde_anterior.<ambito>` (única forma de deshacer un reset).

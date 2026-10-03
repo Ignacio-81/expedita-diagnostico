@@ -88,6 +88,13 @@ M críticos` con la lista); ningún umbral numérico de salud en `src/app.js`;
 "muestra chica"; tendencia con día parcial; `pacientes` con `status: error`
 no rompe el resto; consola sin errores.
 
+### 2.3 Página Costos y mensajes (fixtures)
+
+Con `?mock=staging|cupo-agotado|cupo-se-agota|cupo-null|estimado-null|legacy`
+en `src/costos.html` (ver `fixtures/README.md`): sin "NaN"/"undefined"/"$ 0" en
+campos null; `meta_medido_ars: 0` → `$ 0`; `legacy` (sin campos nuevos) renderiza
+sin errores de consola; la navegación entre páginas conserva `?env`/`?mock`.
+
 ## 3. Responsive básico
 
 Sin un sitio de 8 páginas no hace falta revisar consistencia entre

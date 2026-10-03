@@ -15,6 +15,11 @@ const PARAMS = new URLSearchParams(location.search);
 const AMBIENTE = PARAMS.get("env") === "test" ? "test" : "staging";
 const WEBHOOK_URL = BACKENDS[AMBIENTE];
 
+// Dos páginas estáticas con el mismo app.js: <body data-pagina="..."> decide
+// qué se renderiza. La página de Diagnóstico (index.html, la URL de siempre)
+// es el default; costos.html declara "costos" (renderers en costos.js).
+const PAGINA = document.body.dataset.pagina === "costos" ? "costos" : "diagnostico";
+
 // Mocks locales para desarrollar sin depender de que WF5 esté desplegado.
 // `?mock=sin-reset` elige la variante sin reset (también allowlist fija).
 const MOCKS = {
@@ -22,6 +27,13 @@ const MOCKS = {
   "sin-reset": "../docs/mock-response-sin-reset.json",
   v4: "../docs/mock-response-v4.json",
   "v4-critico": "../docs/mock-response-v4-critico.json",
+  // Fixtures de costos nuevos (reglas por mensaje de Meta, 1/10/2026).
+  staging: "../fixtures/diagnostico-staging.json",
+  "cupo-agotado": "../fixtures/diagnostico-cupo-agotado.json",
+  "cupo-se-agota": "../fixtures/diagnostico-cupo-se-agota.json",
+  "cupo-null": "../fixtures/diagnostico-cupo-null.json",
+  "estimado-null": "../fixtures/diagnostico-estimado-null.json",
+  legacy: "../fixtures/diagnostico-legacy.json",
 };
 const MOCK_URL = MOCKS[PARAMS.get("mock")] || MOCKS["con-reset"];
 
@@ -95,22 +107,47 @@ function fmtBool(v) {
   return v ? "Sí" : "No";
 }
 
-function fmtArs(v) {
-  if (!esDato(v)) return "sin datos";
+// Número finito o null: un valor ausente, null o no numérico (NaN, texto) es
+// "sin datos" — nunca "NaN" ni un 0 inventado. Un 0 real sí se muestra.
+function numeroONull(v) {
+  if (!esDato(v) || v === "" || typeof v === "boolean") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+// "$ 2.261" (es-AR, miles con punto; `useGrouping: "always"` fuerza el punto
+// también en 4 dígitos). `decimales` = máximo de decimales (ej. costo por turno).
+function fmtArs(v, decimales) {
+  const n = numeroONull(v);
+  if (n === null) return "sin datos";
   return new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency: "ARS",
-    maximumFractionDigits: 0,
-  }).format(v);
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimales || 0,
+    useGrouping: "always",
+  }).format(n);
 }
 
 function fmtUsd(v) {
-  if (!esDato(v)) return "sin datos";
-  return new Intl.NumberFormat("en-US", {
+  const n = numeroONull(v);
+  if (n === null) return "sin datos";
+  return new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 2,
-  }).format(v);
+  }).format(n);
+}
+
+// Entero/decimal es-AR con miles con punto ("1.025", "3,7").
+function fmtNum(v, decimales) {
+  const n = numeroONull(v);
+  if (n === null) return "sin datos";
+  return new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimales || 0,
+    useGrouping: "always",
+  }).format(n);
 }
 
 // Parsea un ISO del backend (con o sin milisegundos) a Date; null si no es
@@ -1284,7 +1321,7 @@ const SERIES_TENDENCIA = [
   ["confirmaciones", "Confirmaciones"],
   ["auto_cancelados", "Auto-cancelados"],
   ["derivaciones", "Derivaciones"],
-  ["mensajes_facturables", "Mensajes facturables"],
+  // `mensajes_facturables` vive en la página Costos y mensajes.
 ];
 
 function buildSparkline(dias, clave) {
@@ -1456,121 +1493,6 @@ function renderSemaforo(card, resumen) {
     card.className = "semaforo semaforo-unk";
     clear(card);
     card.appendChild(el("strong", { text: "Semáforo: sin datos (error al mostrarlo)" }));
-  }
-}
-
-function lineaMedicion(costos) {
-  const partes = [`Primer mensaje medido: ${fmtFechaCorta(costos.medicion_desde)}`];
-  if (esDato(costos.medicion_dias)) {
-    partes.push(plural(costos.medicion_dias, "día", "días"));
-  }
-  if (typeof costos.medicion_mes_completo === "boolean") {
-    partes.push(costos.medicion_mes_completo ? "mes completo" : "mes parcial");
-  }
-  return partes.join(" · ");
-}
-
-function renderCostos(body, negocio) {
-  const costos = esObjeto(negocio) && esObjeto(negocio.costos) ? negocio.costos : null;
-  if (!costos) {
-    renderSinDatos(body, "sin datos");
-    return;
-  }
-  try {
-    clear(body);
-
-    body.appendChild(
-      el("p", {
-        className: "periodo-info",
-        text: fmtAncla(costos.reset_desde, "Mes calendario en curso (sin reset)"),
-      })
-    );
-    body.appendChild(el("p", { className: "periodo-sub", text: lineaMedicion(costos) }));
-
-    if (costos.medicion_status === "error") {
-      renderErrorDetalle(body, costos.medicion_error_detalle, "crit");
-    }
-
-    // Cifra destacada: hasta el 1/10/2026 lo que importa es cuánto costaría
-    // el mismo tráfico con el cobro por mensaje; desde entonces, el medido.
-    const perMessageVigente = costos.pricing_per_message_vigente === true;
-    const medidoTone = esDato(costos.meta_medido_ars) ? undefined : "muted";
-    const destacadas = perMessageVigente
-      ? [{ label: "Meta — medido", value: fmtArs(costos.meta_medido_ars), tone: medidoTone }]
-      : [
-          {
-            label: "Con el cobro por mensaje (desde 1/10/2026)",
-            value: fmtArs(costos.meta_proyectado_per_message_ars),
-            tone: esDato(costos.meta_proyectado_per_message_ars) ? undefined : "muted",
-          },
-          {
-            label: "Medido con las reglas actuales",
-            value: fmtArs(costos.meta_medido_ars),
-            tone: medidoTone,
-            small: true,
-          },
-        ];
-    renderStats(body, destacadas, { className: "stats-destacadas" });
-
-    let proyeccion = {
-      label: "Proyección a 30 días del medido",
-      value: fmtArs(costos.meta_medido_proyeccion_mes_ars),
-      small: true,
-    };
-    if (!esDato(costos.meta_medido_proyeccion_mes_ars)) {
-      proyeccion.tone = "muted";
-      if (esDato(costos.medicion_dias) && costos.medicion_dias < 7) {
-        proyeccion.value = "necesita ≥ 7 días de medición";
-      }
-    }
-    const secundarias = el("div", { className: "subgrupo" });
-    renderStats(
-      secundarias,
-      [
-        proyeccion,
-        {
-          label: "Estimado por turnos (modelo anterior)",
-          value: fmtArs(costos.meta_estimado_ars),
-          tone: esDato(costos.meta_estimado_ars) ? undefined : "muted",
-          small: true,
-        },
-        {
-          label: "Groq — estimado (hoy free tier)",
-          value: fmtUsd(costos.groq_estimado_usd),
-          tone: esDato(costos.groq_estimado_usd) ? undefined : "muted",
-          small: true,
-        },
-      ],
-      { singleColumn: true }
-    );
-    body.appendChild(secundarias);
-
-    const grupoMensajes = el("div", { className: "subgrupo" });
-    grupoMensajes.appendChild(el("h3", { text: "Mensajes medidos" }));
-    renderStats(grupoMensajes, [
-      {
-        label: "Total en la ventana",
-        value: fmt(costos.mensajes_medidos),
-        tone: esDato(costos.mensajes_medidos) ? undefined : "muted",
-      },
-    ]);
-    const porCategoria = esObjeto(costos.mensajes_por_categoria)
-      ? costos.mensajes_por_categoria
-      : {};
-    renderTablaPares(
-      grupoMensajes,
-      CATEGORIAS_MENSAJE.map((c) => [c, porCategoria[c]]),
-      "Categoría",
-      "Mensajes"
-    );
-    body.appendChild(grupoMensajes);
-
-    if (esDato(costos.nota)) {
-      body.appendChild(el("p", { className: "nota", text: String(costos.nota) }));
-    }
-  } catch (err) {
-    console.error("Error renderizando costos:", err);
-    renderSinDatos(body, "sin datos (error al mostrar este bloque)");
   }
 }
 
@@ -1755,10 +1677,15 @@ function render(dataCruda) {
   VERSION_ACTUAL = parseVersion(version);
   ALERTAS = esObjeto(data.resumen) && Array.isArray(data.resumen.alertas) ? data.resumen.alertas : [];
   renderContrato(version);
-  renderSemaforo(document.getElementById("semaforo"), data.resumen);
+  if (PAGINA === "diagnostico") renderSemaforo(document.getElementById("semaforo"), data.resumen);
 
   document.getElementById("ultima-actualizacion").textContent =
     `Última actualización: ${fmtFecha(data.generated_at)}`;
+
+  if (PAGINA === "costos") {
+    renderPaginaCostos(data);
+    return;
+  }
 
   const salud = esObjeto(data.salud) ? data.salud : {};
 
@@ -1791,8 +1718,13 @@ function render(dataCruda) {
   );
 
   renderNegocio(document.getElementById("negocio-body"), data.negocio);
-  renderCostos(document.getElementById("costos-body"), data.negocio);
   renderTendencia(document.getElementById("panel-tendencia"), document.getElementById("tendencia-body"), data.negocio);
+}
+
+// Página 2 (costos.html): los renderers viven en costos.js, que se carga antes
+// que este archivo. Cada tarjeta se renderiza aislada (try/catch propio).
+function renderPaginaCostos(data) {
+  renderCostosPagina(data.negocio, data.salud);
 }
 
 // ---------------------------------------------------------------------------
@@ -1831,7 +1763,7 @@ function repintarPanel(ambito) {
   if (ambito === "negocio") {
     renderNegocio(document.getElementById("negocio-body"), ultimoData.negocio);
   } else {
-    renderCostos(document.getElementById("costos-body"), ultimoData.negocio);
+    renderPaginaCostos(ultimoData);
   }
 }
 
@@ -1943,6 +1875,22 @@ async function resetearMedicion(ambito) {
   }
 }
 
+// Si la primera carga falla, las tarjetas no deben quedar en "Cargando…" para
+// siempre: se reemplaza el placeholder (solo los que siguen siendo placeholder;
+// si ya hay datos de una carga anterior se conservan).
+function marcarFalloDeCarga() {
+  document.querySelectorAll(".sin-datos.cargando").forEach((nodo) => {
+    nodo.classList.remove("cargando");
+    nodo.textContent = "sin datos (no se pudo cargar — probá Actualizar)";
+  });
+  document.querySelectorAll(".card-head .pill").forEach((pill) => {
+    if (pill.textContent.trim() === "—") setPill(pill, "unk");
+  });
+  if (!ultimoData) {
+    document.getElementById("ultima-actualizacion").textContent = "Sin datos todavía";
+  }
+}
+
 async function actualizar() {
   const boton = document.getElementById("btn-actualizar");
   boton.disabled = true;
@@ -1953,9 +1901,18 @@ async function actualizar() {
   } catch (err) {
     console.error("Error obteniendo diagnóstico:", err);
     mostrarErrorGlobal((err && err.message) || "No se pudo obtener el diagnóstico.");
+    marcarFalloDeCarga();
   } finally {
     boton.disabled = false;
   }
+}
+
+// La navegación conserva la query (?env=test, ?mock=..., ?real=1): sin esto, al
+// cambiar de página se perdería el ambiente elegido y el token iría a otro.
+function initNavegacion() {
+  document.querySelectorAll("#topnav a").forEach((a) => {
+    a.href = `${a.getAttribute("href").split("?")[0]}${location.search}`;
+  });
 }
 
 function initAmbiente() {
@@ -1972,6 +1929,10 @@ document.getElementById("btn-theme").addEventListener("click", () => {
   applyTheme(getEffectiveTheme() === "dark" ? "light" : "dark");
 });
 document.getElementById("btn-actualizar").addEventListener("click", actualizar);
-document.getElementById("btn-reset-negocio").addEventListener("click", () => resetearMedicion("negocio"));
-document.getElementById("btn-reset-costos").addEventListener("click", () => resetearMedicion("costos"));
+// Cada página tiene solo su botón de reset: Diagnóstico → negocio, Costos → costos.
+for (const ambito of ["negocio", "costos"]) {
+  const botonReset = document.getElementById(`btn-reset-${ambito}`);
+  if (botonReset) botonReset.addEventListener("click", () => resetearMedicion(ambito));
+}
+initNavegacion();
 actualizar();

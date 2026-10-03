@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Expedita — Diagnóstico</title>
+<title>Expedita — Costos y mensajes</title>
 <link rel="stylesheet" href="styles.css">
 </head>
-<body data-pagina="diagnostico">
+<body data-pagina="costos">
 <header class="topbar">
   <div class="topbar-left">
     <h1>Expedita — Diagnóstico</h1>
@@ -14,8 +14,8 @@
     <span class="contract-badge" id="contract-badge">contrato —</span>
   </div>
   <nav class="topnav" id="topnav" aria-label="Secciones del panel">
-    <a href="index.html" data-nav="diagnostico" aria-current="page">Diagnóstico</a>
-    <a href="costos.html" data-nav="costos">Costos y mensajes</a>
+    <a href="index.html" data-nav="diagnostico">Diagnóstico</a>
+    <a href="costos.html" data-nav="costos" aria-current="page">Costos y mensajes</a>
   </nav>
   <div class="topbar-right">
     <span class="last-update" id="ultima-actualizacion">Sin datos todavía</span>
@@ -56,76 +56,43 @@
     </span>
   </div>
 
-  <section class="semaforo semaforo-unk" id="semaforo" role="status" aria-live="polite" hidden></section>
-
   <main class="grid">
 
-    <section class="card col-12" id="panel-n8n" aria-labelledby="h-n8n">
+    <section class="card col-7" id="panel-costos" aria-labelledby="h-costos">
       <div class="card-head">
-        <h2 id="h-n8n">Salud — n8n</h2>
-        <span class="pill" id="n8n-status">—</span>
+        <h2 id="h-costos">Costos de Meta / WhatsApp</h2>
+        <button type="button" class="btn-reset" id="btn-reset-costos">Resetear medición</button>
       </div>
-      <div class="card-body" id="n8n-body">
+      <p class="reset-aviso" id="reset-aviso-costos" role="status" hidden></p>
+      <div class="card-body" id="costos-body">
         <p class="sin-datos cargando">Cargando…</p>
       </div>
     </section>
 
-    <section class="card col-4" id="panel-db" aria-labelledby="h-db">
+    <section class="card col-5" id="panel-cupo" aria-labelledby="h-cupo">
       <div class="card-head">
-        <h2 id="h-db">Base de datos</h2>
-        <span class="pill" id="db-status">—</span>
+        <h2 id="h-cupo">Cupo gratuito de service</h2>
+        <span class="pill" id="cupo-status">—</span>
       </div>
-      <div class="card-body" id="db-body">
+      <div class="card-body" id="cupo-body">
         <p class="sin-datos cargando">Cargando…</p>
       </div>
     </section>
 
-    <section class="card col-4" id="panel-meta" aria-labelledby="h-meta">
+    <section class="card col-12" id="panel-mensajes" aria-labelledby="h-mensajes">
       <div class="card-head">
-        <h2 id="h-meta">Meta / WhatsApp</h2>
-        <span class="pill" id="meta-status">—</span>
+        <h2 id="h-mensajes">Estadística de mensajes</h2>
       </div>
-      <div class="card-body" id="meta-body">
+      <div class="card-body" id="mensajes-body">
         <p class="sin-datos cargando">Cargando…</p>
       </div>
     </section>
 
-    <section class="card col-4" id="panel-infra" aria-labelledby="h-infra">
+    <section class="card col-12" id="panel-calculo" aria-labelledby="h-calculo">
       <div class="card-head">
-        <h2 id="h-infra">Infraestructura</h2>
-        <span class="pill" id="infra-status">—</span>
+        <h2 id="h-calculo">Cómo se calcula</h2>
       </div>
-      <div class="card-body" id="infra-body">
-        <p class="sin-datos cargando">Cargando…</p>
-      </div>
-    </section>
-
-    <section class="card col-12" id="panel-llm" aria-labelledby="h-llm" hidden>
-      <div class="card-head">
-        <h2 id="h-llm">Groq / LLM</h2>
-        <span class="pill" id="llm-status">—</span>
-      </div>
-      <div class="card-body" id="llm-body">
-        <p class="sin-datos cargando">Cargando…</p>
-      </div>
-    </section>
-
-    <section class="card col-12" id="panel-negocio" aria-labelledby="h-negocio">
-      <div class="card-head">
-        <h2 id="h-negocio">Turnos / Negocio</h2>
-        <button type="button" class="btn-reset" id="btn-reset-negocio">Resetear medición</button>
-      </div>
-      <p class="reset-aviso" id="reset-aviso-negocio" role="status" hidden></p>
-      <div class="card-body" id="negocio-body">
-        <p class="sin-datos cargando">Cargando…</p>
-      </div>
-    </section>
-
-    <section class="card col-12" id="panel-tendencia" aria-labelledby="h-tendencia" hidden>
-      <div class="card-head">
-        <h2 id="h-tendencia">Tendencia — últimos 7 días</h2>
-      </div>
-      <div class="card-body" id="tendencia-body">
+      <div class="card-body" id="calculo-body">
         <p class="sin-datos cargando">Cargando…</p>
       </div>
     </section>
@@ -140,6 +107,7 @@
 
 </div>
 
+<script src="costos.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
