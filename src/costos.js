@@ -152,7 +152,6 @@ function renderCostosMeta(body, costos) {
   const hayCalendario = numeroONull(calendario) !== null;
   const lineal = costos.meta_medido_proyeccion_mes_ars;
   const proyecciones = el("div", { className: "subgrupo" });
-  proyecciones.appendChild(el("h3", { text: "Proyección del mes" }));
   renderStatsFuente(
     proyecciones,
     [
@@ -213,7 +212,6 @@ const FUENTE_ESTIMADO = {
 
 function renderEstimadoRegimen(costos) {
   const grupo = el("div", { className: "subgrupo" });
-  grupo.appendChild(el("h3", { text: "Estimado mensual" }));
 
   const conFuente = "meta_estimado_fuente" in costos;
   const fuente = esDato(costos.meta_estimado_fuente) ? String(costos.meta_estimado_fuente).toLowerCase() : null;
@@ -406,7 +404,7 @@ function renderCupo(body, pill, costos) {
   const base = numeroONull(c.ritmo_dias_base);
   renderStatsFuente(body, [
     {
-      label: "Consumidos este mes",
+      label: "Consumidos",
       value: fmtNum(c.consumidos_mes),
       tone: consumidos !== null ? undefined : "muted",
       fuente: "medido",
@@ -429,16 +427,20 @@ function renderCupo(body, pill, costos) {
       small: true,
     },
     {
-      label: "Agotamiento estimado",
+      label: "Agotamiento",
       value: c.agotado_observado === true
         ? "ya agotado"
         : esDato(c.fecha_agotamiento_estimada)
           ? fmtDiaLargo(c.fecha_agotamiento_estimada)
           : c.se_agota_este_mes === false
-            ? "no se agota este mes"
+            ? "no se agota"
             : "sin datos",
       tone: c.agotado_observado === true || esDato(c.fecha_agotamiento_estimada) ? "warn" : "muted",
-      sub: c.se_agota_este_mes === null || !("se_agota_este_mes" in c) ? "Sin estimación todavía." : undefined,
+      sub: c.se_agota_este_mes === null || !("se_agota_este_mes" in c)
+        ? "Sin estimación todavía."
+        : c.se_agota_este_mes === false && c.agotado_observado !== true && !esDato(c.fecha_agotamiento_estimada)
+          ? "En lo que resta del mes."
+          : undefined,
       fuente: "estimado",
       small: true,
     },

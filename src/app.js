@@ -132,7 +132,7 @@ function fmtArs(v, decimales) {
 function fmtUsd(v) {
   const n = numeroONull(v);
   if (n === null) return "sin datos";
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 2,
